@@ -1,8 +1,6 @@
 <Project>
 
-  <!-- Product metadata on every assembly and exe (SignPath checks product name and version on each signed file). The version comes from the tag: build/publish.ps1 passes -p:Version=<tag
-       without v> and turns the +sha suffix off, so every file of a release reports the same version. A plain build is
-       0.0.0-internal.0+<commit sha> (SourceLink appends the sha). -->
+  <!-- Her derleme (assembly) ve exe üzerindeki ürün meta verileri (SignPath imzalı her dosyanın ürün adını ve sürümünü kontrol eder). Sürüm etiketten (tag) gelir: build/publish.ps1 -p:Version=<v olmayan etiket> argümanını geçirir ve +sha ekini kapatır, böylece bir sürümün her dosyası aynı sürümü raporlar. Düz bir derleme 0.0.0-internal.0+<commit sha> şeklindedir (SourceLink sha'yı ekler). -->
   <PropertyGroup>
     <Product>SCSKiller</Product>
     <Company>The SCSKiller authors</Company>
@@ -12,7 +10,7 @@
     <VersionSuffix>internal.0</VersionSuffix>
   </PropertyGroup>
 
-  <!-- CET-compatible .NET exes fail-fast at start (0x80131506) on Windows 10 builds without CET special user-mode APCs -->
+  <!-- CET uyumlu .NET exe'leri, CET özel kullanıcı modu APC'leri olmayan Windows 10 yapılarında başlangıçta anında hata verir (fail-fast 0x80131506) -->
   <PropertyGroup>
     <CETCompat>false</CETCompat>
   </PropertyGroup>
