@@ -1,13 +1,13 @@
-// The parts of the recorder's admission that read values alone, shared with `selftest admission`: the stamp sig= covers and
-// the verdict from what the checks found.
+// Kaydedicinin kabulünün (admission) yalnızca değerleri okuyan kısımları, `selftest admission` ile paylaşılır: 
+// sig= damgasının kapsadığı yerler ve kontrollerin bulduklarından çıkan karar.
 #pragma once
 #include <windows.h>
 #include <cstring>
 #include <string>
 #include <vector>
 
-// The stamp lines sig= covers, as ScsKiller.Signed writes them: exe_size=, exe_time=, then pid= and pid_time= when pid= is
-// there, then risk= when it is there.
+// sig= damgasının kapsadığı, ScsKiller.Signed tarafından yazılan satırlar: exe_size=, exe_time=, ardından pid= varsa
+// pid= ve pid_time=, risk= varsa risk=.
 inline std::wstring signed_stamp(const std::wstring& size, const std::wstring& time, const std::wstring& pid, const std::wstring& pid_time, const std::wstring& risk,
                                  const std::wstring& vendor = L"", const std::wstring& overlay = L"", const std::wstring& play_s = L"", const std::wstring& tag = L"") {
     std::wstring s = L"exe_size=" + size + L"\r\nexe_time=" + time + L"\r\n";
@@ -20,29 +20,31 @@ inline std::wstring signed_stamp(const std::wstring& size, const std::wstring& t
     return s;
 }
 
-// risk= is either missing, or 1 together with pid=.
+// risk= ya eksiktir, ya da pid= ile birlikte 1'dir.
 inline bool risk_well_formed(const std::wstring& pid, const std::wstring& risk) { return risk.empty() || (!pid.empty() && risk == L"1"); }
 
-// The verdict from what the checks found, in their order: a Riot Games install, the markers in the folders up to the install
-// root ("name (where)"; {"?"} when one couldn't be listed whole) with found_why the reason for the first, the anti-cheat client
-// modules loaded, vac_now's reason ("VAC: ..." when Steam's files couldn't tell). Without risk the first finding refuses.
-// Under risk a definite finding admits and goes to seen as the log lists it; what couldn't be inspected refuses as without risk.
+// Kontrollerin bulduklarından çıkan karar, kendi sıralarına göre: Riot Games kurulumu, kurulum köküne kadar 
+// klasörlerdeki işaretçiler ("isim (nerede)"; biri tam listelenemediyse {"?"}) ve ilkinin nedeni olarak found_why, 
+// yüklenen anti-hile istemci modülleri, vac_now'ın nedeni (Steam'in dosyaları söyleyemediyse "VAC: ..."). 
+// Risk olmadan ilk bulgu reddeder. Risk altında kesin bir bulgu kabul eder ve logun listelediği gibi seen (görüldü)
+// değişkenine geçer; incelenemeyenler risk olmadan reddedildiği gibi reddedilir.
 inline const char* decide(bool risk, bool riot, const std::vector<std::string>& found, const char* found_why, const std::vector<std::string>& loaded, const char* vac,
                           std::string& seen) {
-    if (!risk) return riot ? "Riot Games install" : !found.empty() ? found_why : !loaded.empty() ? "anti-cheat client loaded" : vac;
+    if (!risk) return riot ? "Riot Games kurulumu" : !found.empty() ? found_why : !loaded.empty() ? "anti-hile istemcisi yüklendi" : vac;
     if (!found.empty() && found[0] == "?") return found_why;
     if (vac && !strncmp(vac, "VAC:", 4)) return vac;
     for (auto& m : found) seen += (seen.empty() ? "" : ", ") + m;
-    for (auto& m : loaded) seen += (seen.empty() ? "" : ", ") + m + " loaded";
-    if (riot) seen += (seen.empty() ? "" : ", ") + std::string("Riot Games install");
+    for (auto& m : loaded) seen += (seen.empty() ? "" : ", ") + m + " yüklendi";
+    if (riot) seen += (seen.empty() ? "" : ", ") + std::string("Riot Games kurulumu");
     if (vac) seen += (seen.empty() ? "" : ", ") + std::string("VAC");
-    if (seen.empty()) seen = "none at the first device";
+    if (seen.empty()) seen = "ilk cihazda hiçbir şey yok";
     return nullptr;
 }
 
-// The key's value in scskiller.ini's bytes, read as GetPrivateProfileStringW reads an ANSI file: the first [scskiller]
-// section, the key's first line, trimmed, quotes stripped. A file whose lines the two could split differently (a CR without
-// LF, a NUL, a section header other than [scskiller] exactly, or two of them) reads as empty: not signed.
+// scskiller.ini'nin baytlarındaki anahtarın değeri, GetPrivateProfileStringW'nin bir ANSI dosyasını okuduğu gibi okunur:
+// ilk [scskiller] bölümü, anahtarın ilk satırı, kırpılmış, tırnak işaretleri çıkarılmış halde. Satırların bu ikisini farklı 
+// bölebileceği bir dosya (LF olmadan bir CR, bir NUL, tam olarak [scskiller] dışında bir bölüm başlığı veya bunlardan 
+// ikisi) boş olarak okunur: imzalanmamıştır.
 inline std::wstring ini_value(const std::string& bytes, const wchar_t* key) {
     if (bytes.find('\0') != std::string::npos) return L"";
     for (size_t cr = bytes.find('\r'); cr != std::string::npos; cr = bytes.find('\r', cr + 1))
