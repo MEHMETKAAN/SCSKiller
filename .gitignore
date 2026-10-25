@@ -1,14 +1,14 @@
-# build outputs
+# derleme çıktıları
 proxy/build/
 __pycache__/
 
-# game content and third-party binaries: never commit
+# oyun içeriği ve üçüncü taraf ikili dosyalar: asla commit etmeyin
 out/
 *.db
 *.usmap
 *.dll
 
-# runtime artifacts
+# çalışma zamanı artıkları
 *.log
 *.csv
 !tests/SCSKiller.Tests/Fixtures/**/*.csv
@@ -16,5 +16,5 @@ bin/
 obj/
 .claude/
 
-# packaging output (build/publish.ps1)
+# paketleme çıktısı (build/publish.ps1)
 dist/
