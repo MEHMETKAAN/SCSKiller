@@ -1,23 +1,19 @@
-// D3D11 compile-key probe: which input-layout fields, partner stages and output-merger state make the driver compile a
-// shader again, whether those compiles reach the driver's disk cache, and whether a zero-count indirect draw (what
-// warm11.cpp issues) compiles at all. Standalone: one file, system d3d11.dll, no SCSKiller code.
+// D3D11 derleme-anahtarı (compile-key) probu: Hangi giriş-düzeni alanlarının, ortak aşamaların ve çıktı-birleştirici (output-merger)
+// durumunun sürücünün bir shader'ı yeniden derlemesine yol açtığı, bu derlemelerin sürücünün disk önbelleğine ulaşıp ulaşmadığı
+// ve dolaylı bir sıfır-sayılı çizimin (zero-count indirect draw) (warm11.cpp'nin yayınladığı) derlenip derlenmediği incelenir. 
+// Bağımsız: Tek dosya, sistem d3d11.dll'i, hiçbir SCSKiller kodu içermez.
 //   cl /std:c++17 /O2 /EHsc layout11.cpp d3d11.lib dxgi.lib d3dcompiler.lib
-// No args: the orchestrator. Copies itself to fresh exe names (a new name = an empty driver cache), runs the children
-// 3x with fresh seeds and prints medians. Children:
-//   vs <seed> [again]  heavy VS + trivial PS: the first draw, then one draw per variant (layout field, topology,
-//                      partner PS). "again" = a second process of the same name: the variants in reverse order.
-//   ps <seed> [again]  heavy PS + trivial VS (no input layout): render-target formats, blend, depth, MSAA, SRV formats,
-//                      samplers, partner VS.
-//   warm <seed> <gen|exact|direct>  the heavy VS, PS and CS used once: gen = warm11's way (float4 per element, a pass-
-//                      through VS for the PS, RGBA16F + D24S8, zero-count indirect); exact = the game's layout and PS,
-//                      still indirect; direct = exact with a real draw.
-//   game <seed> <order>  the "game": heavy VS with its layout, heavy PS, heavy CS, each timed on its own (child_game).
-//   real <vs.bin> [again]  a game's VS: a layout from its input signature (32-bit formats), then one element at a
-//                      time in a 16- or 8-bit format.
-//   geo <seed> [again] a heavy GS and a heavy HS+DS pair behind other VSs and before other PSs.
-//   real-dir <dir>     the orchestrator for every *.bin in dir (run twice per file, under one fresh name).
-//   pspair <seed> <warm|game> <l|t> <a|b>  the heavy PS behind a VS with or without an input layout (child_pspair).
-//   only <vs|ps|geo|pspair|warmps|warm>  the orchestrator for one section.
+// Parametre yok: Orkestratör (yönetici). Kendini yeni exe adlarıyla kopyalar (yeni bir ad = boş bir sürücü önbelleği),
+// alt işlemleri (children) taze tohumlarla (seeds) 3 kez çalıştırır ve medyan değerleri yazdırır. Alt İşlemler (Children):
+//   vs <tohum> [again]  ağır VS + basit PS: ilk çizim, ardından varyant (giriş alanı, topoloji, partner PS) başına bir çizim. "again" = aynı isimde ikinci bir süreç: varyantlar ters sırada.
+//   ps <tohum> [again]  ağır PS + basit VS (giriş düzeni yok): işleme-hedefi formatları, harmanlama (blend), derinlik, MSAA, SRV formatları, örnekleyiciler, partner VS.
+//   warm <tohum> <gen|exact|direct>  ağır VS, PS ve CS birer kez kullanılır: gen = warm11'in yolu (eleman başına float4, PS için doğrudan geçen (pass-through) VS, RGBA16F + D24S8, sıfır-sayılı dolaylı çizim); exact = oyunun düzeni ve PS'i, hala dolaylı; direct = gerçek bir çizim ile exact.
+//   game <tohum> <sıra> "oyun": kendi düzeniyle ağır VS, ağır PS, ağır CS, her biri kendi başına (child_game) zamanlanır.
+//   real <vs.bin> [again]  bir oyunun VS'i: giriş imzasından bir düzen (32 bit formatlar), ardından 16 veya 8 bit formatında her seferinde bir eleman.
+//   geo <tohum> [again] diğer VS'lerin arkasında ve diğer PS'lerin önünde ağır bir GS ve ağır bir HS+DS çifti.
+//   real-dir <dizin>    dizindeki her *.bin dosyası için orkestratör (dosya başına iki kez, yeni bir isim altında).
+//   pspair <tohum> <warm|game> <l|t> <a|b> giriş düzeni olan veya olmayan bir VS'nin arkasındaki ağır PS (child_pspair).
+//   only <vs|ps|geo|pspair|warmps|warm> sadece bir bölüm için orkestratör.
 #define NOMINMAX
 #include <windows.h>
 #include <d3d11.h>
@@ -52,7 +48,7 @@ static ID3DBlob* compile(const std::string& src, const char* target) {
     return code;
 }
 
-// Issue + Flush + wait on an event query: includes a compile the driver does lazily at the first draw.
+// Yayım + Temizleme (Flush) + bir olay sorgusunda bekleme: Sürücünün ilk çizimde tembel (lazy) bir şekilde yaptığı derlemeyi içerir.
 static double timed(const std::function<void()>& issue) {
     ID3D11Query* q = nullptr;
     D3D11_QUERY_DESC qd = {D3D11_QUERY_EVENT, 0};
@@ -67,7 +63,7 @@ static double timed(const std::function<void()>& issue) {
     return t;
 }
 
-// The hardware adapter with the most dedicated VRAM, as scskiller_warm picks it.
+// En yüksek ayrılmış VRAM'e sahip donanım bağdaştırıcısı (scskiller_warm'ın seçtiği gibi).
 static bool make_device() {
     IDXGIFactory1* f = nullptr;
     IDXGIAdapter1 *best = nullptr, *a;
@@ -81,7 +77,7 @@ static bool make_device() {
     D3D_FEATURE_LEVEL fl[] = {D3D_FEATURE_LEVEL_11_1, D3D_FEATURE_LEVEL_11_0}, got;
     if (best) D3D11CreateDevice(best, D3D_DRIVER_TYPE_UNKNOWN, nullptr, 0, fl, 2, D3D11_SDK_VERSION, &dev, &got, &ctx), best->Release();
     if (f) f->Release();
-    if (dev) printf("# adapter %ls\n", bd.Description);
+    if (dev) printf("# secilen_adaptor %ls\n", bd.Description);
     return dev != nullptr;
 }
 
@@ -140,9 +136,9 @@ static ID3D11ShaderResourceView* make_srv(DXGI_FORMAT f) {
     return v;
 }
 
-// ---- shaders. `K` (the seed) makes the heavy ones bytecode no driver cache has seen.
+// ---- shader'lar. `K` (tohum/seed), ağır olanları hiçbir sürücü önbelleğinin görmediği bytecode'a dönüştürür.
 static std::string K(unsigned seed) { return std::to_string(seed) + ".0"; }
-static std::string heavy_vs(unsigned s) {  // TANGENT is declared and never read
+static std::string heavy_vs(unsigned s) {  // TANGENT bildirilir ancak asla okunmaz
     return "cbuffer C:register(b0){float4 kc;};"
            "struct I{float3 p:POSITION;float3 n:NORMAL;float2 uv:TEXCOORD0;float4 c:COLOR0;float4 t:TANGENT0;};"
            "struct O{float4 pos:SV_Position;float4 a:TEXCOORD0;float4 b:TEXCOORD1;};"
@@ -160,22 +156,22 @@ static std::string heavy_cs(unsigned s) {
     return "RWBuffer<float> b:register(u0);[numthreads(64,1,1)]void main(uint3 id:SV_DispatchThreadID){"
            "float4 v=float4(id.x," + K(s) + ",2,3);[unroll]for(int i=0;i<160;++i){v=sin(v*(" + K(s) + "+i))+pow(abs(v.yzwx)+0.001,1.3);} b[id.x]=dot(v,1);}";
 }
-// Partner PSs of the heavy VS (index = VsVar::ps; 5 = no PS).
+// Ağır VS'nin Partner PS'leri (index = VsVar::ps; 5 = PS yok).
 static const char* kPartnerPs[] = {
     "float4 main(float4 p:SV_Position,float4 a:TEXCOORD0,float4 b:TEXCOORD1):SV_Target{return a+b;}",
     "float4 main(float4 p:SV_Position,float4 a:TEXCOORD0):SV_Target{return a.x;}",
     "float4 main(float4 p:SV_Position,nointerpolation float4 a:TEXCOORD0,nointerpolation float4 b:TEXCOORD1):SV_Target{return a+b;}",
     "float4 main(float4 p:SV_Position,float4 a:TEXCOORD0,float4 b:TEXCOORD1):SV_Target{return (a+b)*2;}",
-    "float4 main():SV_Target{return 0;}",  // warm11's null_ps
+    "float4 main():SV_Target{return 0;}",  // warm11'in null_ps'i
 };
-// Partner VSs of the heavy PS (index = PsVar::vs): no input layout.
+// Ağır PS'nin Partner VS'leri (index = PsVar::vs): giriş düzeni (input layout) yok.
 static const char* kPartnerVs[] = {
     "struct O{float4 p:SV_Position;float2 uv:TEXCOORD0;};O main(uint i:SV_VertexID){O o;o.uv=float2(i&1,i>>1);o.p=float4(o.uv*2-1,0.5,1);return o;}",
     "struct O{float4 p:SV_Position;float2 uv:TEXCOORD0;float4 c:COLOR0;};O main(uint i:SV_VertexID){O o;o.uv=float2(i>>1,i&1);o.p=float4(o.uv*4-1,0.5,1);o.c=i;return o;}",
     "struct O{float4 p:SV_Position;float2 uv:TEXCOORD0;};O main(uint i:SV_VertexID){O o;o.uv=float2(i,i*0.5);o.p=float4(o.uv,0,1);return o;}",
 };
 
-// ---- input signature (ISGN/ISG1) of DXBC, enough to build a layout for a game's VS
+// ---- Bir oyunun VS'si için düzen oluşturmaya yetecek kadar DXBC'nin giriş imzası (ISGN/ISG1)
 static uint32_t u32(const std::string& s, size_t o) { uint32_t v = 0; if (o + 4 <= s.size()) memcpy(&v, s.data() + o, 4); return v; }
 struct Sig { std::string name; uint32_t index, sv, type, reg; uint8_t mask, rw; };
 static std::vector<Sig> isgn(const std::string& c) {
@@ -196,8 +192,8 @@ static std::vector<Sig> isgn(const std::string& c) {
     return v;
 }
 
-// ---- VS variants
-struct El { std::string sem; UINT idx; DXGI_FORMAT f; UINT slot, off; UINT step; };  // step 0 = per vertex
+// ---- VS varyantları
+struct El { std::string sem; UINT idx; DXGI_FORMAT f; UINT slot, off; UINT step; };  // step 0 = tepe noktası (vertex) başına
 struct VsVar { std::string name; std::vector<El> el; UINT stride[3] = {64, 16, 16}; UINT vboff = 0;
                D3D11_PRIMITIVE_TOPOLOGY topo = D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST; int ps = 0; };
 
@@ -211,7 +207,7 @@ static El& el(VsVar& v, const char* sem) { for (auto& e : v.el) if (_stricmp(e.s
 static std::vector<VsVar> vs_variants() {
     std::vector<VsVar> r;
     auto add = [&](const char* name, const std::function<void(VsVar&)>& f) { VsVar v{name, base_layout()}; f(v); r.push_back(v); };
-    add("base_again", [](VsVar&) {});  // the same desc, a new layout object
+    add("base_again", [](VsVar&) {});  // aynı desc, yeni bir yerleşim nesnesi
     add("order", [](VsVar& v) { std::reverse(v.el.begin(), v.el.end()); });
     add("extra_elem", [](VsVar& v) { v.el.push_back({"BLENDWEIGHT", 0, DXGI_FORMAT_R32_FLOAT, 1, 0, 0}); });
     add("sem_case", [](VsVar& v) { v.el[0].sem = "position"; v.el[1].sem = "Normal"; });
@@ -260,7 +256,7 @@ static ID3D11InputLayout* make_layout(const std::vector<El>& el, ID3DBlob* vsb) 
 
 static ID3D11RenderTargetView* g_rt;
 
-// One draw of vs (+ps) with this variant's layout and state; -1 if the layout can't be created.
+// Bu varyantın düzeni ve durumuyla bir VS (+ps) çizimi; düzen (layout) oluşturulamazsa -1 döndürür.
 static double draw_vs(ID3D11VertexShader* vs, ID3DBlob* vsb, ID3D11PixelShader* const* ps, const VsVar& v, bool indirect = false) {
     ID3D11InputLayout* il = make_layout(v.el, vsb);
     if (!il) return -1;
@@ -296,7 +292,7 @@ static int child_vs(unsigned seed, bool again) {
     ID3D11PixelShader* ps[5] = {};
     for (int i = 0; i < 5; ++i)
         if (ID3DBlob* b = compile(kPartnerPs[i], "ps_5_0")) dev->CreatePixelShader(b->GetBufferPointer(), b->GetBufferSize(), nullptr, &ps[i]), b->Release();
-    // the partner PSs' own compiles, behind a throwaway VS, so a variant's time is the heavy VS's
+    // Partner PS'lerin kendi derlemeleri; çöpe atılacak bir VS arkasında çalışır, böylece varyantın süresi ağır VS'nin süresi olur
     if (ID3DBlob* b = compile("struct O{float4 p:SV_Position;float4 a:TEXCOORD0;float4 b:TEXCOORD1;};O main(uint i:SV_VertexID){O o=(O)i;o.p=float4(i,0,0,1);return o;}", "vs_5_0")) {
         ID3D11VertexShader* t = nullptr;
         dev->CreateVertexShader(b->GetBufferPointer(), b->GetBufferSize(), nullptr, &t);
@@ -312,7 +308,7 @@ static int child_vs(unsigned seed, bool again) {
     return 0;
 }
 
-// ---- PS variants
+// ---- PS varyantları
 struct PsVar { std::string name; DXGI_FORMAT rt = DXGI_FORMAT_R8G8B8A8_UNORM; UINT samples = 1; int nrt = 1; bool extra_rt = false;
                int blend = 0; UINT8 wmask = D3D11_COLOR_WRITE_ENABLE_ALL; bool a2c = false; DXGI_FORMAT ds = DXGI_FORMAT_UNKNOWN; bool stencil = false;
                DXGI_FORMAT srv = DXGI_FORMAT_R8G8B8A8_UNORM; int smp = 0; int vs = 0; };
@@ -386,517 +382,3 @@ static double draw_ps(ID3D11PixelShader* ps, ID3D11VertexShader* const* vss, con
     ctx->OMSetDepthStencilState(dss, 1);
     ctx->OMSetBlendState(bs, nullptr, 0xFFFFFFFF);
     D3D11_VIEWPORT vp = {0, 0, 16, 16, 0, 1};
-    ctx->RSSetViewports(1, &vp);
-    double t = timed([&] { indirect ? ctx->DrawInstancedIndirect(g_args, 0) : ctx->Draw(3, 0); });
-    ctx->OMSetRenderTargets(0, nullptr, nullptr);
-    ctx->OMSetDepthStencilState(nullptr, 0), ctx->OMSetBlendState(nullptr, nullptr, 0xFFFFFFFF);
-    rel(rt[0]), rel(rt[1]), rel(dsv), rel(dss), rel(bs), rel(srv), rel(smp);
-    return t;
-}
-
-static int child_ps(unsigned seed, bool again) {
-    if (!make_device()) return 1;
-    common();
-    ID3DBlob* psb = compile(heavy_ps(seed), "ps_5_0");
-    if (!psb) return 1;
-    ID3D11PixelShader* ps = nullptr;
-    printf("PS create=%.3f\n", ms([&] { dev->CreatePixelShader(psb->GetBufferPointer(), psb->GetBufferSize(), nullptr, &ps); }));
-    ID3D11VertexShader* vss[3] = {};
-    for (int i = 0; i < 3; ++i)
-        if (ID3DBlob* b = compile(kPartnerVs[i], "vs_5_0")) dev->CreateVertexShader(b->GetBufferPointer(), b->GetBufferSize(), nullptr, &vss[i]), b->Release();
-    // the partner VSs' own compiles, behind a throwaway PS
-    if (ID3DBlob* b = compile("float4 main(float4 p:SV_Position,float2 uv:TEXCOORD0):SV_Target{return uv.xyxy;}", "ps_5_0")) {
-        ID3D11PixelShader* t = nullptr;
-        dev->CreatePixelShader(b->GetBufferPointer(), b->GetBufferSize(), nullptr, &t);
-        for (int i = 0; i < 3; ++i) { PsVar v{"pre"}; v.vs = i; draw_ps(t, vss, v); }
-        rel(t), b->Release();
-    }
-    auto vars = ps_variants();
-    if (again) std::reverse(vars.begin(), vars.end());
-    else printf("PS v=base ms=%.3f\n", draw_ps(ps, vss, PsVar{"base"}));
-    for (auto& v : vars) printf("PS v=%s ms=%.3f\n", v.name.c_str(), draw_ps(ps, vss, v));
-    return 0;
-}
-
-// ---- GS and HS+DS: do they compile again for another VS before them or another PS after them?
-static std::string heavy_gs(unsigned s) {
-    return "struct V{float4 p:SV_Position;float2 uv:TEXCOORD0;};[maxvertexcount(3)]void main(triangle V v[3],inout TriangleStream<V> s){"
-           "[unroll]for(int i=0;i<3;++i){V o=v[i];float3 pp=o.p.xyz;[unroll]for(int k=0;k<48;++k){pp=sin(pp*(" + K(s) + "+k))+cos(pp.yzx);}"
-           "o.p.xyz=pp;s.Append(o);}}";
-}
-static const char* kTessCp = "struct CP{float3 p:POS;float2 uv:TEXCOORD0;};struct PC{float e[3]:SV_TessFactor;float i:SV_InsideTessFactor;};";
-static std::string heavy_hs(unsigned s) {
-    return std::string(kTessCp) + "PC pcf(InputPatch<CP,3> ip){PC o;float3 a=ip[0].p+ip[1].p+ip[2].p;[unroll]for(int j=0;j<32;++j){a=sin(a*(" + K(s) +
-           "+j))+cos(a);}o.e[0]=a.x;o.e[1]=a.y;o.e[2]=a.z;o.i=a.x+a.y;return o;}"
-           "[domain(\"tri\")][partitioning(\"fractional_odd\")][outputtopology(\"triangle_cw\")][outputcontrolpoints(3)][patchconstantfunc(\"pcf\")]"
-           "CP main(InputPatch<CP,3> ip,uint i:SV_OutputControlPointID){CP o=ip[i];float3 a=o.p;[unroll]for(int j=0;j<32;++j){a=sin(a*(" + K(s) + "+j))+cos(a);}o.p=a;return o;}";
-}
-static std::string heavy_ds(unsigned s) {
-    return std::string(kTessCp) + "struct O{float4 pos:SV_Position;float2 uv:TEXCOORD0;};[domain(\"tri\")]O main(PC pc,float3 b:SV_DomainLocation,const OutputPatch<CP,3> p){"
-           "O o;float3 a=p[0].p*b.x+p[1].p*b.y+p[2].p*b.z;[unroll]for(int j=0;j<48;++j){a=sin(a*(" + K(s) + "+j))+cos(a);}"
-           "o.pos=float4(a,1);o.uv=p[0].uv*b.x+p[1].uv*b.y+p[2].uv*b.z;return o;}";
-}
-// VSs before the GS (0-2) and before the HS (3-5): the same outputs, other code with the same outputs, more outputs.
-static const char* kGeoVs[] = {
-    "struct O{float4 p:SV_Position;float2 uv:TEXCOORD0;};O main(uint i:SV_VertexID){O o;o.uv=float2(i&1,i>>1);o.p=float4(o.uv*2-1,0.5,1);return o;}",
-    "struct O{float4 p:SV_Position;float2 uv:TEXCOORD0;};O main(uint i:SV_VertexID){O o;o.uv=float2(i,i*0.5);o.p=float4(o.uv,0,1);return o;}",
-    "struct O{float4 p:SV_Position;float2 uv:TEXCOORD0;float4 c:COLOR0;};O main(uint i:SV_VertexID){O o;o.uv=float2(i>>1,i&1);o.p=float4(o.uv*4-1,0.5,1);o.c=i;return o;}",
-    "struct CP{float3 p:POS;float2 uv:TEXCOORD0;};CP main(uint i:SV_VertexID){CP o;o.uv=float2(i&1,i>>1);o.p=float3(o.uv*2-1,0.5);return o;}",
-    "struct CP{float3 p:POS;float2 uv:TEXCOORD0;};CP main(uint i:SV_VertexID){CP o;o.uv=float2(i,i*0.5);o.p=float3(o.uv,i);return o;}",
-    "struct CP{float3 p:POS;float2 uv:TEXCOORD0;float4 c:COLOR0;};CP main(uint i:SV_VertexID){CP o;o.uv=float2(i>>1,i&1);o.p=float3(o.uv*4-1,0.5);o.c=i;return o;}",
-};
-// PSs after: reads all, reads less, none
-static const char* kGeoPs[] = {
-    "float4 main(float4 p:SV_Position,float2 uv:TEXCOORD0):SV_Target{return uv.xyxy;}",
-    "float4 main(float4 p:SV_Position,float2 uv:TEXCOORD0):SV_Target{return uv.x;}",
-};
-
-static int child_geo(unsigned seed, bool again) {
-    if (!make_device()) return 1;
-    common();
-    g_rt = make_rtv(DXGI_FORMAT_R8G8B8A8_UNORM);
-    ID3D11GeometryShader* gs = nullptr;
-    ID3D11HullShader* hs = nullptr;
-    ID3D11DomainShader* ds = nullptr;
-    if (ID3DBlob* b = compile(heavy_gs(seed), "gs_5_0")) dev->CreateGeometryShader(b->GetBufferPointer(), b->GetBufferSize(), nullptr, &gs), b->Release();
-    if (ID3DBlob* b = compile(heavy_hs(seed), "hs_5_0")) dev->CreateHullShader(b->GetBufferPointer(), b->GetBufferSize(), nullptr, &hs), b->Release();
-    if (ID3DBlob* b = compile(heavy_ds(seed + 1), "ds_5_0")) dev->CreateDomainShader(b->GetBufferPointer(), b->GetBufferSize(), nullptr, &ds), b->Release();
-    ID3D11VertexShader* vs[6] = {};
-    ID3D11PixelShader* ps[2] = {};
-    for (int i = 0; i < 6; ++i)
-        if (ID3DBlob* b = compile(kGeoVs[i], "vs_5_0")) dev->CreateVertexShader(b->GetBufferPointer(), b->GetBufferSize(), nullptr, &vs[i]), b->Release();
-    for (int i = 0; i < 2; ++i)
-        if (ID3DBlob* b = compile(kGeoPs[i], "ps_5_0")) dev->CreatePixelShader(b->GetBufferPointer(), b->GetBufferSize(), nullptr, &ps[i]), b->Release();
-    if (!gs || !hs || !ds || !vs[5] || !ps[1]) return printf("# shader creation failed\n"), 1;
-    ctx->IASetInputLayout(nullptr);
-    ctx->OMSetRenderTargets(1, &g_rt, nullptr);
-    // the partners' own compiles first, without the heavy stages
-    ctx->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-    for (int v = 0; v < 3; ++v) for (int p = 0; p < 2; ++p) ctx->VSSetShader(vs[v], nullptr, 0), ctx->PSSetShader(ps[p], nullptr, 0), timed([&] { ctx->Draw(3, 0); });
-    struct Var { const char* name; bool tess; int vs, ps; };  // ps -1 = none
-    std::vector<Var> vars = {{"gs_base_again", false, 0, 0}, {"gs_vs_other_same_outputs", false, 1, 0}, {"gs_vs_more_outputs", false, 2, 0},
-                             {"gs_ps_reads_less", false, 0, 1}, {"gs_ps_none", false, 0, -1}, {"gs_base_end", false, 0, 0},
-                             {"tess_base_again", true, 3, 0}, {"tess_vs_other_same_outputs", true, 4, 0}, {"tess_vs_more_outputs", true, 5, 0},
-                             {"tess_ps_reads_less", true, 3, 1}, {"tess_ps_none", true, 3, -1}, {"tess_base_end", true, 3, 0}};
-    auto draw = [&](const Var& v) {
-        ctx->IASetPrimitiveTopology(v.tess ? D3D11_PRIMITIVE_TOPOLOGY_3_CONTROL_POINT_PATCHLIST : D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-        ctx->VSSetShader(vs[v.vs], nullptr, 0);
-        ctx->GSSetShader(v.tess ? nullptr : gs, nullptr, 0);
-        ctx->HSSetShader(v.tess ? hs : nullptr, nullptr, 0);
-        ctx->DSSetShader(v.tess ? ds : nullptr, nullptr, 0);
-        ctx->PSSetShader(v.ps < 0 ? nullptr : ps[v.ps], nullptr, 0);
-        return timed([&] { ctx->Draw(3, 0); });
-    };
-    if (again) std::reverse(vars.begin(), vars.end());
-    else printf("GEO v=gs_base ms=%.3f\nGEO v=tess_base ms=%.3f\n", draw(vars[0]), draw(vars[6]));
-    for (auto& v : vars) printf("GEO v=%s ms=%.3f\n", v.name, draw(v));
-    return 0;
-}
-
-// ---- warm / game
-static ID3D11ComputeShader* make_cs(unsigned seed) {
-    ID3D11ComputeShader* cs = nullptr;
-    if (ID3DBlob* b = compile(heavy_cs(seed), "cs_5_0")) dev->CreateComputeShader(b->GetBufferPointer(), b->GetBufferSize(), nullptr, &cs), b->Release();
-    return cs;
-}
-static double dispatch(ID3D11ComputeShader* cs, bool indirect) {
-    ctx->CSSetShader(cs, nullptr, 0);
-    ctx->CSSetUnorderedAccessViews(0, 1, &g_uav, nullptr);
-    return timed([&] { indirect ? ctx->DispatchIndirect(g_args, 0) : ctx->Dispatch(1, 1, 1); });
-}
-
-static int child_warm(unsigned seed, const std::wstring& kind) {
-    if (!make_device()) return 1;
-    common();
-    bool gen = kind == L"gen", indirect = kind != L"direct";
-    ID3DBlob *vsb = compile(heavy_vs(seed), "vs_5_0"), *psb = compile(heavy_ps(seed), "ps_5_0");
-    ID3D11VertexShader* vs = nullptr;
-    ID3D11PixelShader* ps = nullptr;
-    if (!vsb || !psb) return 1;
-    dev->CreateVertexShader(vsb->GetBufferPointer(), vsb->GetBufferSize(), nullptr, &vs);
-    dev->CreatePixelShader(psb->GetBufferPointer(), psb->GetBufferSize(), nullptr, &ps);
-    ID3D11PixelShader* pps[5] = {};
-    for (int i = 0; i < 5; ++i)
-        if (ID3DBlob* b = compile(kPartnerPs[i], "ps_5_0")) dev->CreatePixelShader(b->GetBufferPointer(), b->GetBufferSize(), nullptr, &pps[i]), b->Release();
-    ID3D11VertexShader* vss[3] = {};
-    for (int i = 0; i < 3; ++i)
-        if (ID3DBlob* b = compile(kPartnerVs[i], "vs_5_0")) dev->CreateVertexShader(b->GetBufferPointer(), b->GetBufferSize(), nullptr, &vss[i]), b->Release();
-    // warm11: RGBA16F target, D24S8 depth (always), float4 per input element, its null PS behind a VS, a pass-through VS
-    g_rt = make_rtv(gen ? DXGI_FORMAT_R16G16B16A16_FLOAT : DXGI_FORMAT_R8G8B8A8_UNORM);
-    VsVar v{"warm", base_layout()};
-    if (gen) {
-        UINT off = 0;
-        for (auto& e : v.el) e.f = DXGI_FORMAT_R32G32B32A32_FLOAT, e.off = off, off += 16;
-        v.stride[0] = off, v.ps = 4;
-    }
-    PsVar p{"warm"};
-    if (gen) p.rt = DXGI_FORMAT_R16G16B16A16_FLOAT, p.ds = DXGI_FORMAT_D24_UNORM_S8_UINT, p.vs = 2;
-    // one PS difference from the game's state at a time: depth, vs2 (another partner VS), rt=<DXGI format>
-    if (kind == L"depth") p.ds = DXGI_FORMAT_D24_UNORM_S8_UINT;
-    if (kind == L"vs2") p.vs = 2;
-    if (kind.rfind(L"rt=", 0) == 0) p.rt = (DXGI_FORMAT)_wtoi(kind.c_str() + 3);
-    double a = draw_vs(vs, vsb, pps, v, indirect), b = draw_ps(ps, vss, p, indirect), c = dispatch(make_cs(seed), indirect);
-    printf("WARM kind=%ls vs=%.3f ps=%.3f cs=%.3f\n", kind.c_str(), a, b, c);
-    return 0;
-}
-
-// order: vsfirst = create everything, then VS, PS, CS; isolated = each heavy shader created right before its own first
-// use, PS, CS, VS (a compile started at create can't hide behind another's); sleep = create everything, wait 500 ms, then
-// PS, CS, VS (a compile done at create, in the background, is then already over).
-static int child_game(unsigned seed, const std::wstring& order) {
-    if (!make_device()) return 1;
-    common();
-    g_rt = make_rtv(DXGI_FORMAT_R8G8B8A8_UNORM);
-    ID3DBlob *vsb = compile(heavy_vs(seed), "vs_5_0"), *psb = compile(heavy_ps(seed), "ps_5_0");
-    if (!vsb || !psb) return 1;
-    ID3D11PixelShader* pps[5] = {};
-    for (int i = 0; i < 5; ++i)
-        if (ID3DBlob* b = compile(kPartnerPs[i], "ps_5_0")) dev->CreatePixelShader(b->GetBufferPointer(), b->GetBufferSize(), nullptr, &pps[i]), b->Release();
-    ID3D11VertexShader* vss[3] = {};
-    for (int i = 0; i < 3; ++i)
-        if (ID3DBlob* b = compile(kPartnerVs[i], "vs_5_0")) dev->CreateVertexShader(b->GetBufferPointer(), b->GetBufferSize(), nullptr, &vss[i]), b->Release();
-    ID3D11VertexShader* vs = nullptr;
-    ID3D11PixelShader* ps = nullptr;
-    ID3D11ComputeShader* cs = nullptr;
-    auto mk_vs = [&] { dev->CreateVertexShader(vsb->GetBufferPointer(), vsb->GetBufferSize(), nullptr, &vs); };
-    auto mk_ps = [&] { dev->CreatePixelShader(psb->GetBufferPointer(), psb->GetBufferSize(), nullptr, &ps); };
-    double a, b, c;
-    if (order == L"isolated") {
-        mk_ps(), b = draw_ps(ps, vss, PsVar{"game"});
-        cs = make_cs(seed), c = dispatch(cs, false);
-        mk_vs(), a = draw_vs(vs, vsb, pps, VsVar{"game", base_layout()});
-    } else {
-        mk_vs(), mk_ps(), cs = make_cs(seed);
-        if (order == L"sleep") Sleep(500);
-        if (order == L"vsfirst") a = draw_vs(vs, vsb, pps, VsVar{"game", base_layout()}), b = draw_ps(ps, vss, PsVar{"game"}), c = dispatch(cs, false);
-        else b = draw_ps(ps, vss, PsVar{"game"}), c = dispatch(cs, false), a = draw_vs(vs, vsb, pps, VsVar{"game", base_layout()});
-    }
-    printf("GAME vs=%.3f ps=%.3f cs=%.3f\n", a, b, c);
-    return 0;
-}
-
-// ---- the PS's partner VS across processes: a light VS with an input layout (POSITION, TEXCOORD0) before the heavy PS.
-// pspair <seed> <warm|game> <vs: l = the light VS, t = a VS without inputs> <layout: a = 32-bit floats, b = 16-bit>
-// The game (game) compiles its VS variant first behind a trivial PS, then times the heavy PS's first draw.
-static int child_pspair(unsigned seed, const std::wstring& role, const std::wstring& vsk, const std::wstring& lk) {
-    if (!make_device()) return 1;
-    common();
-    g_rt = make_rtv(DXGI_FORMAT_R8G8B8A8_UNORM);
-    ID3DBlob* vsb = compile(vsk == L"l" ? "float4 main(float3 p:POSITION,float2 uv:TEXCOORD0,out float2 o:TEXCOORD0):SV_Position{o=uv;return float4(p,1);}"
-                                        : kPartnerVs[0], "vs_5_0");
-    ID3DBlob *psb = compile(heavy_ps(seed), "ps_5_0"), *tpb = compile("float4 main(float4 p:SV_Position,float2 uv:TEXCOORD0):SV_Target{return uv.xyxy;}", "ps_5_0");
-    if (!vsb || !psb || !tpb) return 1;
-    ID3D11VertexShader* vs = nullptr;
-    ID3D11PixelShader *ps = nullptr, *tp = nullptr;
-    dev->CreateVertexShader(vsb->GetBufferPointer(), vsb->GetBufferSize(), nullptr, &vs);
-    dev->CreatePixelShader(tpb->GetBufferPointer(), tpb->GetBufferSize(), nullptr, &tp);
-    VsVar v{"pair", {}};
-    if (vsk == L"l") {
-        bool b = lk == L"b";
-        v.el = {{"POSITION", 0, b ? DXGI_FORMAT_R16G16B16A16_FLOAT : DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, 0},
-                {"TEXCOORD", 0, b ? DXGI_FORMAT_R16G16_FLOAT : DXGI_FORMAT_R32G32_FLOAT, 0, b ? 8u : 12u, 0}};
-        v.stride[0] = b ? 12 : 20;
-    }
-    ID3D11PixelShader* pre[5] = {tp};
-    auto draw = [&](ID3D11PixelShader* p) {
-        pre[0] = p;
-        if (vsk == L"l") return draw_vs(vs, vsb, pre, v, role == L"warm");
-        ctx->IASetInputLayout(nullptr), ctx->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-        ctx->VSSetShader(vs, nullptr, 0), ctx->PSSetShader(p, nullptr, 0), ctx->OMSetRenderTargets(1, &g_rt, nullptr);
-        return timed([&] { role == L"warm" ? ctx->DrawInstancedIndirect(g_args, 0) : ctx->Draw(3, 0); });
-    };
-    draw(tp);  // the VS variant's own compile
-    dev->CreatePixelShader(psb->GetBufferPointer(), psb->GetBufferSize(), nullptr, &ps);
-    ID3D11ShaderResourceView* srv = make_srv(DXGI_FORMAT_R8G8B8A8_UNORM);
-    ID3D11ShaderResourceView* srvs[4] = {srv, srv, srv, srv};
-    ctx->PSSetShaderResources(0, 4, srvs), ctx->PSSetSamplers(0, 1, &g_smp);
-    printf("PAIR ps=%.3f\n", draw(ps));
-    return 0;
-}
-
-// ---- a game's VS
-static DXGI_FORMAT fmt32(const Sig& s) {
-    static const DXGI_FORMAT f[3][4] = {
-        {DXGI_FORMAT_R32_UINT, DXGI_FORMAT_R32G32_UINT, DXGI_FORMAT_R32G32B32_UINT, DXGI_FORMAT_R32G32B32A32_UINT},
-        {DXGI_FORMAT_R32_SINT, DXGI_FORMAT_R32G32_SINT, DXGI_FORMAT_R32G32B32_SINT, DXGI_FORMAT_R32G32B32A32_SINT},
-        {DXGI_FORMAT_R32_FLOAT, DXGI_FORMAT_R32G32_FLOAT, DXGI_FORMAT_R32G32B32_FLOAT, DXGI_FORMAT_R32G32B32A32_FLOAT}};
-    int w = 32 - std::countl_zero((unsigned)s.mask);  // components up to the highest declared one
-    return f[std::clamp((int)s.type, 1, 3) - 1][std::clamp(w, 1, 4) - 1];
-}
-static DXGI_FORMAT fmt_small(const Sig& s) {  // a 4-component 16-bit float / 8-bit uint, what engines pack normals, UVs and indices in
-    return s.type == 3 ? DXGI_FORMAT_R16G16B16A16_FLOAT : s.type == 1 ? DXGI_FORMAT_R8G8B8A8_UINT : DXGI_FORMAT_R8G8B8A8_SINT;
-}
-
-static int child_real(const wchar_t* path, bool again) {
-    std::string code;
-    if (FILE* f = _wfopen(path, L"rb")) { char buf[65536]; for (size_t n; (n = fread(buf, 1, sizeof buf, f));) code.append(buf, n); fclose(f); }
-    std::vector<Sig> in;
-    for (auto& s : isgn(code)) if (!s.sv) in.push_back(s);  // SV_VertexID / SV_InstanceID come from the IA, not a buffer
-    if (in.empty() || in.size() > 16 || !make_device()) return printf("# no usable input signature\n"), 1;
-    common();
-    g_rt = make_rtv(DXGI_FORMAT_R8G8B8A8_UNORM);
-    ID3DBlob* vsb = nullptr;
-    D3DCreateBlob(code.size(), &vsb);
-    memcpy(vsb->GetBufferPointer(), code.data(), code.size());
-    ID3D11VertexShader* vs = nullptr;
-    double create = ms([&] { dev->CreateVertexShader(code.data(), code.size(), nullptr, &vs); });
-    if (!vs) return printf("# the runtime rejects the VS\n"), 1;
-    ID3D11PixelShader* ps[5] = {};
-    if (ID3DBlob* b = compile(kPartnerPs[4], "ps_5_0")) dev->CreatePixelShader(b->GetBufferPointer(), b->GetBufferSize(), nullptr, &ps[0]), b->Release();
-    // every element 16 bytes apart in slot 0, so a smaller format never moves another element
-    VsVar base{"base", {}};
-    for (UINT i = 0; i < in.size(); ++i) base.el.push_back({in[i].name, in[i].index, fmt32(in[i]), 0, 16 * i, 0});
-    base.stride[0] = 16 * (UINT)in.size();
-    std::vector<VsVar> vars = {base};
-    vars[0].name = "base_again";
-    for (size_t i = 0; i < in.size(); ++i) {
-        VsVar v = base;
-        v.el[i].f = fmt_small(in[i]);
-        v.name = "fmt_" + in[i].name + std::to_string(in[i].index) + (in[i].rw ? "" : "_unread");
-        vars.push_back(v);
-    }
-    printf("REAL create=%.3f elements=%zu\n", create, in.size());
-    if (again) std::reverse(vars.begin(), vars.end());
-    else printf("REAL v=base ms=%.3f\n", draw_vs(vs, vsb, ps, base, true));  // zero-count indirect: none of its code runs
-    for (auto& v : vars) printf("REAL v=%s ms=%.3f\n", v.name.c_str(), draw_vs(vs, vsb, ps, v, true));
-    return 0;
-}
-
-// ---- orchestrator
-static std::string run(const std::wstring& exe, const std::wstring& args) {
-    SECURITY_ATTRIBUTES sa = {sizeof sa, nullptr, TRUE};
-    HANDLE r = nullptr, w = nullptr;
-    if (!CreatePipe(&r, &w, &sa, 0)) return {};
-    SetHandleInformation(r, HANDLE_FLAG_INHERIT, 0);
-    STARTUPINFOW si = {sizeof si};
-    si.dwFlags = STARTF_USESTDHANDLES, si.hStdOutput = w, si.hStdError = w, si.hStdInput = GetStdHandle(STD_INPUT_HANDLE);
-    PROCESS_INFORMATION pi = {};
-    std::wstring cmd = L"\"" + exe + L"\" " + args;
-    std::string out;
-    if (CreateProcessW(nullptr, cmd.data(), nullptr, nullptr, TRUE, CREATE_NO_WINDOW, nullptr, nullptr, &si, &pi)) {
-        CloseHandle(w), w = nullptr;
-        char buf[4096];
-        DWORD n;
-        while (ReadFile(r, buf, sizeof buf, &n, nullptr) && n) out.append(buf, n);
-        WaitForSingleObject(pi.hProcess, INFINITE);
-        CloseHandle(pi.hProcess), CloseHandle(pi.hThread);
-    }
-    if (w) CloseHandle(w);
-    CloseHandle(r);
-    return out;
-}
-
-// Bytes and files of the driver's D3D11 cache folders, read after a child exits (the driver maps the files).
-static std::pair<long long, int> cache_size() {
-    long long bytes = 0;
-    int files = 0;
-    wchar_t la[MAX_PATH];
-    if (!GetEnvironmentVariableW(L"LOCALAPPDATA", la, MAX_PATH)) return {0, 0};
-    for (const wchar_t* sub : {L"\\AMD\\DxCache\\*", L"\\NVIDIA\\DXCache\\*"}) {
-        WIN32_FIND_DATAW fd;
-        HANDLE h = FindFirstFileW((std::wstring(la) + sub).c_str(), &fd);
-        if (h == INVALID_HANDLE_VALUE) continue;
-        do if (!(fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)) bytes += (long long)fd.nFileSizeHigh << 32 | fd.nFileSizeLow, ++files;
-        while (FindNextFileW(h, &fd));
-        FindClose(h);
-    }
-    return {bytes, files};
-}
-
-static std::string traced(const std::wstring& exe, const std::wstring& args) {
-    auto before = cache_size();
-    std::string out = run(exe, args);
-    auto after = cache_size();
-    char buf[128];
-    snprintf(buf, sizeof buf, "CACHE delta_bytes=%lld delta_files=%d\n", after.first - before.first, after.second - before.second);
-    return out + buf;
-}
-
-static double median(std::vector<double> v) { std::sort(v.begin(), v.end()); return v.empty() ? -1 : v[v.size() / 2]; }
-static double after(const std::string& s, const char* key) { size_t p = s.find(key); return p == std::string::npos ? -1 : atof(s.c_str() + p + strlen(key)); }
-
-// "<TAG> v=<name> ms=<x>" lines -> name -> ms, in order
-static std::vector<std::pair<std::string, double>> rows(const std::string& out, const char* tag) {
-    std::vector<std::pair<std::string, double>> r;
-    std::string t = std::string(tag) + " v=";
-    for (size_t p = 0; (p = out.find(t, p)) != std::string::npos;) {
-        size_t s = p + t.size(), e = out.find(' ', s);
-        r.emplace_back(out.substr(s, e - s), after(out.substr(e), "ms="));
-        p = e;
-    }
-    return r;
-}
-
-static std::wstring g_dir, g_self;
-static int g_names = 0;
-static std::wstring fresh_exe() {  // a copy under a name no driver cache has seen
-    std::wstring exe = g_dir + L"l11_" + std::to_wstring(GetTickCount() % 100000) + L"_" + std::to_wstring(++g_names) + L".exe";
-    CopyFileW(g_self.c_str(), exe.c_str(), TRUE);
-    return exe;
-}
-
-static void table(const char* tag, const std::vector<std::string>& outs1, const std::vector<std::string>& outs2) {
-    std::vector<std::string> names;
-    std::map<std::string, std::vector<double>> p1, p2;
-    for (auto& o : outs1) for (auto& [n, t] : rows(o, tag)) { if (!p1.count(n)) names.push_back(n); p1[n].push_back(t); }
-    for (auto& o : outs2) for (auto& [n, t] : rows(o, tag)) p2[n].push_back(t);
-    double cold = median(p1["base"]), floor = median(p1["base_again"]);
-    printf("  %-24s %10s %10s %8s\n", "variant", "proc1 ms", "proc2 ms", "p1/cold");
-    for (auto& n : names) {
-        double a = median(p1[n]), b = p2.count(n) ? median(p2[n]) : -1;
-        printf("  %-24s %10.2f %10.2f %8.2f\n", n.c_str(), a, b, cold > 0 ? a / cold : -1);
-    }
-    printf("  (cold = proc1 base %.2f ms, in-process floor = base_again %.2f ms; -1 = layout not created)\n", cold, floor);
-}
-
-int wmain(int argc, wchar_t** argv) {
-    std::wstring mode = argc > 1 ? argv[1] : L"";
-    bool again = argc > 3 && std::wstring(argv[3]) == L"again";
-    if (mode == L"vs" && argc > 2) return child_vs((unsigned)_wtoi(argv[2]), again);
-    if (mode == L"ps" && argc > 2) return child_ps((unsigned)_wtoi(argv[2]), again);
-    if (mode == L"geo" && argc > 2) return child_geo((unsigned)_wtoi(argv[2]), again);
-    if (mode == L"pspair" && argc > 5) return child_pspair((unsigned)_wtoi(argv[2]), argv[3], argv[4], argv[5]);
-    if (mode == L"warm" && argc > 3) return child_warm((unsigned)_wtoi(argv[2]), argv[3]);
-    if (mode == L"game" && argc > 3) return child_game((unsigned)_wtoi(argv[2]), argv[3]);
-    if (mode == L"real" && argc > 2) return child_real(argv[2], again);
-
-    wchar_t p[MAX_PATH];
-    GetModuleFileNameW(nullptr, p, MAX_PATH);
-    g_self = p;
-    g_dir = g_self.substr(0, g_self.find_last_of(L'\\') + 1) + L"layout11-" + std::to_wstring(GetCurrentProcessId()) + L"\\";
-    if (!CreateDirectoryW(g_dir.c_str(), nullptr)) return printf("can't create %ls\n", g_dir.c_str()), 1;
-    unsigned base = GetTickCount() % 1000000;
-    int reps = 3;
-
-    if (mode == L"real-dir" && argc > 2) {
-        WIN32_FIND_DATAW fd;
-        HANDLE h = FindFirstFileW((std::wstring(argv[2]) + L"\\*.bin").c_str(), &fd);
-        for (bool ok = h != INVALID_HANDLE_VALUE; ok; ok = FindNextFileW(h, &fd)) {
-            std::wstring f = std::wstring(argv[2]) + L"\\" + fd.cFileName, exe = fresh_exe();
-            std::string o1 = traced(exe, L"real \"" + f + L"\" x"), o2 = traced(exe, L"real \"" + f + L"\" again");
-            printf("=== %ls (%s) ===\n%s", fd.cFileName, o1.substr(0, o1.find('\n')).c_str(), o1.find("REAL create") != std::string::npos ? "" : o1.c_str());
-            auto r1 = rows(o1, "REAL"), r2 = rows(o2, "REAL");
-            double cold = r1.empty() ? -1 : r1[0].second;
-            printf("  create=%.2f  %s", after(o1, "REAL create="), o1.substr(o1.find("CACHE")).c_str());
-            for (auto& [n, t] : r1) {
-                double t2 = -1;
-                for (auto& [n2, x] : r2) if (n2 == n) t2 = x;
-                printf("  %-28s p1=%8.2f p2=%8.2f p1/cold=%5.2f\n", n.c_str(), t, t2, cold > 0 ? t / cold : -1);
-            }
-            DeleteFileW(exe.c_str());
-        }
-        if (h != INVALID_HANDLE_VALUE) FindClose(h);
-        RemoveDirectoryW(g_dir.c_str());
-        return 0;
-    }
-
-    std::wstring only = mode == L"only" && argc > 2 ? argv[2] : L"";  // one section: vs, ps, geo or warm
-    auto want = [&](const wchar_t* s) { return only.empty() || only == s; };
-
-    if (want(L"geo")) {
-        printf("=== GS and HS+DS: one heavy GS, one heavy HS+DS pair, a draw per partner VS/PS (proc1), then reverse (proc2) ===\n");
-        std::vector<std::string> o1, o2;
-        for (int i = 0; i < reps; ++i) {
-            std::wstring exe = fresh_exe(), s = std::to_wstring(base + i * 7 + 301);
-            o1.push_back(traced(exe, L"geo " + s + L" x")), o2.push_back(traced(exe, L"geo " + s + L" again"));
-            DeleteFileW(exe.c_str());
-        }
-        table("GEO", o1, o2);
-    }
-    if (want(L"vs")) {
-    printf("=== VS: one heavy VS, a draw per variant (proc1), then the same name again in reverse order (proc2) ===\n");
-    std::vector<std::string> v1, v2;
-    for (int i = 0; i < reps; ++i) {
-        std::wstring exe = fresh_exe(), s = std::to_wstring(base + i * 7 + 1);
-        v1.push_back(traced(exe, L"vs " + s + L" x")), v2.push_back(traced(exe, L"vs " + s + L" again"));
-        printf("  rep %d: %s proc1 %s  proc2 %s", i, v1.back().substr(0, v1.back().find('\n')).c_str(),
-               v1.back().substr(v1.back().find("CACHE")).c_str(), v2.back().substr(v2.back().find("CACHE")).c_str());
-        DeleteFileW(exe.c_str());
-    }
-    printf("%s", v1[0].substr(v1[0].find("# isgn"), v1[0].find('\n', v1[0].find("# isgn")) - v1[0].find("# isgn") + 1).c_str());
-    printf("  VS create (proc1) median %.2f ms\n", median([&] { std::vector<double> c; for (auto& o : v1) c.push_back(after(o, "VS create=")); return c; }()));
-    table("VS", v1, v2);
-    }
-
-    if (want(L"ps")) {
-    printf("=== PS: one heavy PS behind a trivial VS, a draw per variant (proc1), then reverse (proc2) ===\n");
-    std::vector<std::string> q1, q2;
-    for (int i = 0; i < reps; ++i) {
-        std::wstring exe = fresh_exe(), s = std::to_wstring(base + i * 7 + 101);
-        q1.push_back(traced(exe, L"ps " + s + L" x")), q2.push_back(traced(exe, L"ps " + s + L" again"));
-        printf("  rep %d: proc1 %s  proc2 %s", i, q1.back().substr(q1.back().find("CACHE")).c_str(), q2.back().substr(q2.back().find("CACHE")).c_str());
-        DeleteFileW(exe.c_str());
-    }
-    printf("  PS create (proc1) median %.2f ms\n", median([&] { std::vector<double> c; for (auto& o : q1) c.push_back(after(o, "PS create=")); return c; }()));
-    table("PS", q1, q2);
-    }
-
-    if (want(L"pspair")) {
-        printf("=== WARM -> GAME, PS behind a VS with an input layout: the game draws the heavy PS behind the light VS, layout b ===\n");
-        const wchar_t* kinds[] = {L"cold", L"l b", L"l a", L"t a"};  // warm: same VS + layout, same VS + other layout, a VS without inputs
-        std::map<std::wstring, std::vector<double>> t;
-        for (int i = 0; i < reps; ++i) {
-            std::wstring s = std::to_wstring(base + i * 7 + 501);
-            for (const wchar_t* kind : kinds) {
-                std::wstring exe = fresh_exe();
-                if (kind != std::wstring(L"cold")) traced(exe, L"pspair " + s + L" warm " + kind);
-                std::string o = traced(exe, L"pspair " + s + L" game l b");
-                t[kind].push_back(after(o, "PAIR ps="));
-                DeleteFileW(exe.c_str());
-            }
-        }
-        for (const wchar_t* kind : kinds) {
-            printf("  warm %-4ls game ps:", kind);
-            for (double x : t[kind]) printf(" %7.2f", x);
-            printf("  median %7.2f\n", median(t[kind]));
-        }
-    }
-    if (want(L"warmps")) {
-        printf("=== WARM -> GAME, PS and CS: the warm's PS state differs from the game's (RGBA8, no depth, partner VS 0) in one thing; game isolated ===\n");
-        const wchar_t* kinds[] = {L"cold", L"exact", L"gen", L"depth", L"vs2", L"rt=87", L"rt=29", L"rt=10", L"rt=26", L"rt=24", L"rt=11", L"rt=2", L"rt=34", L"rt=41", L"rt=61"};
-        std::map<std::wstring, std::vector<double>> ps, cs;
-        for (int i = 0; i < reps; ++i) {
-            std::wstring s = std::to_wstring(base + i * 7 + 401);
-            for (const wchar_t* kind : kinds) {
-                std::wstring exe = fresh_exe();
-                if (kind != std::wstring(L"cold")) traced(exe, L"warm " + s + L" " + kind);
-                std::string o = traced(exe, L"game " + s + L" isolated");
-                ps[kind].push_back(after(o.substr(o.find("GAME")), "ps=")), cs[kind].push_back(after(o.substr(o.find("GAME")), "cs="));
-                DeleteFileW(exe.c_str());
-            }
-        }
-        for (const wchar_t* kind : kinds) {
-            printf("  warm %-6ls game ps:", kind);
-            for (double t : ps[kind]) printf(" %7.2f", t);
-            printf("  median %7.2f   cs median %6.2f\n", median(ps[kind]), median(cs[kind]));
-        }
-        printf("  (rt=<DXGI_FORMAT>: 87 BGRA8, 29 RGBA8 sRGB, 10 RGBA16F, 26 R11G11B10F, 24 RGB10A2, 11 RGBA16 UNORM, 2 RGBA32F, 34 RG16F, 41 R32F, 61 R8)\n");
-    }
-    if (want(L"warm")) {
-    printf("=== WARM -> GAME: a warm process, then the game's first use under the same name (fresh name = cold) ===\n");
-    std::map<std::string, std::vector<double>> g;
-    const wchar_t* orders[] = {L"vsfirst", L"isolated", L"sleep"};
-    for (int i = 0; i < reps; ++i) {
-        std::wstring s = std::to_wstring(base + i * 7 + 201);
-        for (const wchar_t* order : orders)
-            for (const wchar_t* kind : {L"cold", L"gen", L"exact", L"direct"}) {
-                std::wstring exe = fresh_exe();
-                std::string w = kind == std::wstring(L"cold") ? "" : traced(exe, L"warm " + s + L" " + kind);
-                std::string o = traced(exe, L"game " + s + L" " + order);
-                char k[40];
-                snprintf(k, sizeof k, "%ls %ls", order, kind);
-                printf("  rep %d %-15s warm: %s game: %s", i, k, w.empty() ? "-\n" : w.substr(w.find("WARM")).c_str(), o.substr(o.find("GAME")).c_str());
-                for (const char* f : {"vs=", "ps=", "cs="}) g[std::string(k) + "_" + f].push_back(after(o.substr(o.find("GAME")), f));
-                DeleteFileW(exe.c_str());
-            }
-    }
-    for (const wchar_t* order : orders)
-        for (const wchar_t* kind : {L"cold", L"gen", L"exact", L"direct"}) {
-            char k[40];
-            snprintf(k, sizeof k, "%ls %ls", order, kind);
-            printf("  MEDIAN game (%-15s) vs=%.2f ps=%.2f cs=%.2f\n", k, median(g[std::string(k) + "_vs="]), median(g[std::string(k) + "_ps="]), median(g[std::string(k) + "_cs="]));
-        }
-    }
-    RemoveDirectoryW(g_dir.c_str());
-    return 0;
-}
