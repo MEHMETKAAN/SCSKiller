@@ -3,8 +3,7 @@
 </p>
 <h1 align="center">SCSKiller</h1>
 <p align="center">
-  <strong>Shader Compilation Stutter Killer.</strong> SCSKiller compiles your games' shaders into your GPU driver's
-  cache before you play, so the game doesn't stop to compile them mid-game. Free and open source, for Windows.
+  <strong>Shader Derleme Takılmasını Azaltıcı.</strong> SCSKiller, siz oyuna başlamadan önce oyunlarınızın shader'larını GPU sürücünüzün önbelleğine derler, böylece oyun ortasında derleme yapmak için duraklamaz. Windows için ücretsiz ve açık kaynaklıdır.
 </p>
 
 <p align="center">
@@ -16,9 +15,9 @@
 </p>
 
 <p align="center">
-  <a href="https://scskiller.com">Website</a>
+  <a href="https://scskiller.com">Web Sitesi</a>
   ·
-  <a href="https://github.com/BlueHeisenberg/SCSKiller/releases/latest">Download</a>
+  <a href="https://github.com/BlueHeisenberg/SCSKiller/releases/latest">İndir</a>
   ·
   <a href="https://www.patreon.com/SCSKiller">Patreon</a>
   ·
@@ -26,199 +25,67 @@
   ·
   <a href="https://x.com/SCSKiller">X</a>
   ·
-  <a href="https://github.com/BlueHeisenberg/SCSKiller/issues/new?template=bug.yml">Report a bug</a>
+  <a href="https://github.com/BlueHeisenberg/SCSKiller/issues/new?template=bug.yml">Hata Bildir</a>
   ·
-  <a href="https://github.com/BlueHeisenberg/SCSKiller/issues/new?template=game-request.yml">Request a game</a>
+  <a href="https://github.com/BlueHeisenberg/SCSKiller/issues/new?template=game-request.yml">Oyun İsteğinde Bulun</a>
 </p>
 
 > [!WARNING]
-> The only official downloads are this repository's [Releases](https://github.com/BlueHeisenberg/SCSKiller/releases).
-> See [official links](#official-links) for the accounts and sites that belong to SCSKiller.
+> Tek resmi indirme kaynağı bu deponun [Releases (Sürümler)](https://github.com/BlueHeisenberg/SCSKiller/releases) sayfasıdır. SCSKiller'a ait hesaplar ve siteler için [resmi bağlantılara](#resmi-bağlantılar) bakın.
 
 <p align="center">
   <img src=".github/assets/library.webp" alt="SCSKiller's library: games grouped by store, with shader and pipeline counts, cache size, compile time, a status such as Needs rebuilding or Warmed, and Play buttons.">
 </p>
 
-## Why
+## Neden Gerekli?
 
-A game that meets a new effect has the GPU driver compile its shader on the spot, and the frame waits: that's shader
-compilation stutter. SCSKiller reads the shaders a game ships with, works out the pipelines it will build, and compiles
-them into the driver's cache ahead of time, in its own process with the game closed.
+Bir oyun yeni bir görsel efektle karşılaştığında, GPU sürücüsünün o an o efekti (shader) derlemesi gerekir ve ekrandaki kare bu işlem bitene kadar bekler; işte bu duruma shader derleme takılması (stutter) denir. SCSKiller, oyunun yüklü dosyalarındaki shader'ları okur, oyunun oluşturacağı veri yollarını (pipeline) hesaplar ve oyuna girmeden önce bunları GPU sürücüsünün önbelleğine derler.
 
-## Results
+## Sonuçlar
 
-About 5 minutes of play per game, from a cold driver cache and after compiling with SCSKiller. A stutter is a shader
-compile the game waited 20 ms or more for.
+Soğuk (boş) bir sürücü önbelleği ile SCSKiller'ın derlemesinden sonra oyun başına yaklaşık 5 dakikalık oynanış verileridir. Takılma (stutter), oyunun shader derlemek için 20 ms veya daha fazla beklediği anları ifade eder.
 
 <table>
-  <tr><th>Game</th><th>GPU</th><th>Measurement</th><th>Cold</th><th>With SCSKiller</th></tr>
-  <tr><td rowspan="4">Final Fantasy VII Rebirth</td><td rowspan="2">NVIDIA<br>RTX 5090</td><td>Stutters (≥ 20 ms)</td><td>19</td><td><b>0</b></td></tr>
-  <tr><td>Worst stall</td><td>76 ms</td><td><b>5 ms</b></td></tr>
-  <tr><td rowspan="2">AMD<br>Ryzen AI Max+ 395 (Strix Halo)</td><td>Stutters (≥ 20 ms)</td><td>162</td><td><b>0</b></td></tr>
-  <tr><td>Worst stall</td><td>291 ms</td><td><b>7 ms</b></td></tr>
-  <tr><td rowspan="2">Silent Hill: Townfall</td><td rowspan="2">NVIDIA<br>RTX 5090</td><td>Stutters (≥ 20 ms)</td><td>24</td><td><b>0</b></td></tr>
-  <tr><td>Worst stall</td><td>347 ms</td><td><b>8 ms</b></td></tr>
-  <tr><td rowspan="4">Hogwarts Legacy</td><td rowspan="2">NVIDIA<br>RTX 5090</td><td>Stutters (≥ 20 ms)</td><td>1,014</td><td><b>87</b></td></tr>
-  <tr><td>Worst stall</td><td>2,400 ms</td><td><b>100 ms</b></td></tr>
-  <tr><td rowspan="2">AMD<br>Ryzen AI Max+ 395 (Strix Halo)</td><td>Stutters (≥ 20 ms)</td><td>27,743</td><td><b>206</b></td></tr>
-  <tr><td>Worst stall</td><td>2,146 ms</td><td><b>104 ms</b></td></tr>
-  <tr><td rowspan="2">Tiny Tina's Wonderlands</td><td rowspan="2">NVIDIA<br>RTX 5090</td><td>Stutters (≥ 20 ms)</td><td>583</td><td><b>0</b></td></tr>
-  <tr><td>Worst stall</td><td>315 ms</td><td><b>13 ms</b></td></tr>
-  <tr><td>Star Wars Jedi: Survivor</td><td>NVIDIA<br>RTX 5090</td><td>Stutters (≥ 20 ms)</td><td>9,038</td><td><b>11</b></td></tr>
+  <tr><th>Oyun</th><th>GPU</th><th>Ölçüm</th><th>Soğuk (İlk Açılış)</th><th>SCSKiller İle</th></tr>
+  <tr><td rowspan="4">Final Fantasy VII Rebirth</td><td rowspan="2">NVIDIA<br>RTX 5090</td><td>Takılmalar (≥ 20 ms)</td><td>19</td><td><b>0</b></td></tr>
+  <tr><td>En kötü duraklama</td><td>76 ms</td><td><b>5 ms</b></td></tr>
+  <tr><td rowspan="2">AMD<br>Ryzen AI Max+ 395 (Strix Halo)</td><td>Takılmalar (≥ 20 ms)</td><td>162</td><td><b>0</b></td></tr>
+  <tr><td>En kötü duraklama</td><td>291 ms</td><td><b>7 ms</b></td></tr>
+  <tr><td rowspan="2">Silent Hill: Townfall</td><td rowspan="2">NVIDIA<br>RTX 5090</td><td>Takılmalar (≥ 20 ms)</td><td>24</td><td><b>0</b></td></tr>
+  <tr><td>En kötü duraklama</td><td>347 ms</td><td><b>8 ms</b></td></tr>
+  <tr><td rowspan="4">Hogwarts Legacy</td><td rowspan="2">NVIDIA<br>RTX 5090</td><td>Takılmalar (≥ 20 ms)</td><td>1,014</td><td><b>87</b></td></tr>
+  <tr><td>En kötü duraklama</td><td>2,400 ms</td><td><b>100 ms</b></td></tr>
+  <tr><td rowspan="2">AMD<br>Ryzen AI Max+ 395 (Strix Halo)</td><td>Takılmalar (≥ 20 ms)</td><td>27,743</td><td><b>206</b></td></tr>
+  <tr><td>En kötü duraklama</td><td>2,146 ms</td><td><b>104 ms</b></td></tr>
+  <tr><td rowspan="2">Tiny Tina's Wonderlands</td><td rowspan="2">NVIDIA<br>RTX 5090</td><td>Takılmalar (≥ 20 ms)</td><td>583</td><td><b>0</b></td></tr>
+  <tr><td>En kötü duraklama</td><td>315 ms</td><td><b>13 ms</b></td></tr>
+  <tr><td>Star Wars Jedi: Survivor</td><td>NVIDIA<br>RTX 5090</td><td>Takılmalar (≥ 20 ms)</td><td>9,038</td><td><b>11</b></td></tr>
 </table>
 
-Measured with SCSKiller's recorder. Your numbers depend on the game, GPU and driver. SCSKiller fixes shader compilation
-stutter only, not traversal or streaming stutter, and a shader it couldn't find or record can still compile in game.
+SCSKiller'ın kendi kaydedicisiyle ölçülmüştür. Rakamlarınız oyuna, GPU'ya ve sürücünüze bağlı olarak değişiklik gösterir. SCSKiller sadece shader derleme takılmalarını çözer; harita geçişi veya kaplama yükleme kaynaklı takılmaları çözemez. Bulamadığı veya kaydedemediği bir shader oyun içinde yine takılmaya yol açabilir.
 
-## Features
+## Özellikler
 
-- **NVIDIA and AMD**, DirectX 12 games, and DirectX 11 games on NVIDIA.
-- **Finds your games** in Steam, Epic Games, EA app, GOG, Ubisoft Connect, Xbox (PC), Battle.net, PURPLE, HoYoPlay,
-  Gaijin and the Riot Client, plus games you add yourself.
-- **Puts games known to stutter on top**, with the reason, and marks games whose engine prepares its shaders itself.
-- **Compiles again after a driver update**, which clears the shader cache, on its own if you let it.
-- **Optional recorder** for games whose pipelines its files don't give: play a few minutes with it on, then compile. It
-  also records alongside a mod that replaces shaders.
-- **Frame times per session**: with the recorder on, a game's page graphs your last session and marks shader stutters
-  apart from other hitches. They stay on your PC.
-- **Play button** that starts the game through its store.
-- **Community shader hash database** for Patreon supporters: other players' recordings, so your games are covered
-  without recording them first. Sharing yours is opt-in, anonymous and hash-only.
-- **Leaves anti-cheat games alone** beyond reading their files: no launching, no injecting, no recorder, except in a
-  session you allow per game and confirm every launch, at your own risk: without EasyAntiCheat for ELDEN RING and
-  ARMORED CORE VI, or in games with anti-cheat once you turn on "Allow the recorder in games with anti-cheat (at your own
-  risk)".
+- **NVIDIA ve AMD**, DirectX 12 oyunları ve NVIDIA üzerinde DirectX 11 oyunları desteklenir.
+- Steam, Epic Games, EA app, GOG, Ubisoft Connect, Xbox (PC), Battle.net, PURPLE, HoYoPlay, Gaijin ve Riot Client'taki **oyunlarınızı otomatik bulur**, kendi eklediğiniz oyunları da destekler.
+- **Takılma yaptığı bilinen oyunları en üste koyar**, sebebini belirtir ve kendi shader'larını kendisi derleyen oyun motorlarını işaretler.
+- Sürücü güncellemelerinden sonra temizlenen önbellekleri **yeniden derler** (izin verirseniz kendi kendine yapar).
+- Dosyaların yeterli bilgiyi vermediği oyunlar için **isteğe bağlı kaydedici**: açıkken birkaç dakika oynayın, ardından derleyin.
+- **Oturum başına kare süreleri (Frame times)**: Kaydedici açıkken oyunun sayfası son oturumunuzun grafiğini çizer ve shader takılmalarını diğer donmalardan ayırır. Veriler tamamen PC'nizde kalır.
+- Oyunu doğrudan kendi mağazası üzerinden başlatan **Oyna butonu**.
+- Patreon destekçileri için **topluluk shader hash veritabanı**: Başka oyuncuların kayıtları sayesinde oyunlarınızı kendiniz kaydetmeden derleyebilirsiniz. Kendi kayıtlarınızı paylaşmak tamamen isteğe bağlı, anonim ve sadece hash (şifrelenmiş veri) boyutundadır.
+- **Anti-hile oyunlarına dokunmaz**: Dosyalarını okumak dışında başlatma yapmaz, içine enjekte olmaz, kaydediciyi kullanmaz. İstisna olarak, her açılışta bizzat onayladığınız riskli oturumlarda çalışabilir. (Örneğin; ELDEN RING ve ARMORED CORE VI'yı anti-hilesiz çevrimdışı başlatmak veya Ayarlar'dan risk alarak anti-hileli oyunlara izin vermek gibi).
 
-## Install
+## Kurulum
 
-| Requirement | |
-|---|---|
-| OS | Windows 10 (version 2004) or 11, 64-bit |
-| GPU | NVIDIA or AMD |
-| Games | DirectX 12, DirectX 11 on NVIDIA |
+Sürüm [Releases](https://github.com/BlueHeisenberg/SCSKiller/releases/latest) sayfasından `SCSKiller-Setup.exe` dosyasını indirin ve çalıştırın. Yalnızca kendi kullanıcınız için kurulur, yönetici hakları gerektirmez ve kendini otomatik günceller.
 
-Intel GPUs aren't supported yet: I don't have one to test on. If you'd like to sponsor an Intel Arc GPU, get in touch at
-[contact@scskiller.com](mailto:contact@scskiller.com).
+Taşınabilir sürüm istiyorsanız `SCSKiller-<versiyon>-Portable.zip` dosyasını istediğiniz bir klasöre çıkartıp `SCSKiller.exe`'yi çalıştırın.
 
-Download `SCSKiller-Setup.exe` from [Releases](https://github.com/BlueHeisenberg/SCSKiller/releases/latest) and run it.
-It installs for your user only, needs no admin rights and updates itself.
+## Nasıl Kullanılır?
 
-Or unzip `SCSKiller-<version>-Portable.zip` to any folder you can write to and run `SCSKiller.exe`. It updates itself
-too, and keeps its settings and data in a `data` folder beside the exe. Turn recording off for your games before you
-delete the folder, so the recorder leaves the game folders.
+1. **SCSKiller'ı açın.** Oyunlarınızı ve sahip oldukları shader'ları bulacaktır.
+2. **Oyunları sıraya ekleyin ve Derle'ye basın.** "Önerilenlerin tümünü ekle" seçeneği iyi bir başlangıçtır. Derleme sırasında oyunu kapalı tutun.
+3. **Oynayın.** Kendi mağazasından veya Oyna butonuyla oyuna girebilirsiniz.
 
-<!-- UNSIGNED NOTICE: delete this block once releases are signed. -->
-> [!IMPORTANT]
-> **Releases aren't code-signed yet**, so the first run will probably show SmartScreen's "Windows protected your PC".
-> Click **More info**, then **Run anyway**. Updates never show it. Signing through the SignPath Foundation is in
-> progress. To check a download, compare its SHA-256 with the one in the release notes (PowerShell:
-> `Get-FileHash <file>`). Smart App Control (Windows 11) blocks unsigned apps outright: if it's on, wait for a signed
-> release.
-<!-- END UNSIGNED NOTICE -->
-
-## How to use it
-
-1. **Open SCSKiller.** It finds your games and the shaders they ship with.
-2. **Queue games and press Compile.** "Add all recommended" is a good start. Keep the game closed while it compiles.
-3. **Play**, from your store or with the Play button. SCSKiller can be closed. Left open, it checks that the compile
-   reached the cache the game really uses, and with the recorder on, the game's page shows your session's frame times
-   and anything that still compiled.
-
-If a game needs a recording, turn on **Record**, play it for a few minutes, then compile it.
-
-<p align="center">
-  <img src=".github/assets/queue.webp" width="49%" alt="The compile queue: one game compiling with pipelines per second, games waiting, one finished.">
-  <img src=".github/assets/detail.webp" width="49%" alt="A game's page: the frame times of the last session, with shader compile stutters marked apart from other hitches and loading, and the list of slow frames.">
-</p>
-
-## FAQ
-
-**Can I get banned?** SCSKiller only reads the files of games with anti-cheat and adds its recorder to them only in a
-session you allow and confirm (next question). Its anti-cheat check can still miss a game, so you use SCSKiller at your
-own risk, and its authors are not responsible for bans, crashes or lost data.
-
-**Is it safe with anti-cheat games?** Outside a session SCSKiller never launches them, injects into them or gives them
-the recorder. It only reads their files. A session is allowed per game, confirmed every launch, and at your own risk.
-The offline session for ELDEN RING and ARMORED CORE VI runs them offline without EasyAntiCheat when their exe is
-started directly: Steam must be running (offline mode is fine), and SCSKiller adds `d3d12.dll`, `scskiller.ini` and
-`steam_appid.txt` to the game's folder and starts the exe itself. With "Allow the recorder in games with anti-cheat (at
-your own risk)" on in Settings, any other supported game can run a session too: SCSKiller starts the game as usual, with
-`d3d12.dll` and `scskiller.ini` in its folder. Games with anti-cheat can treat the recorder as cheating and ban your
-account, during the session or later. No game is known to be safe. Enabling the recorder in these games is at your own
-risk, and SCSKiller isn't responsible for bans. Bans from it are not support issues. In both kinds the recorder records
-only that process. When the game exits, SCSKiller takes those files out again (each only while it is still the file it
-added) and keeps the recording and the session's frame times, at the next logon or start if SCSKiller was closed or the
-PC crashed. If those files are still there when you start the game online, you could be banned. Don't uninstall
-SCSKiller while the game runs.
-
-**What does it write, and where?** Settings and per-game plans go in `%LOCALAPPDATA%\SCSKiller\` (the `data` folder of
-a portable copy), and the compiled pipelines go in your driver's own shader cache. Game files are never modified. The
-optional recorder adds `d3d12.dll` and `scskiller.ini` to the folder of a game you turn it on for, and turning it off
-removes exactly those files. It never goes into a game with anti-cheat, and comes out the moment SCSKiller finds
-anti-cheat: when it scans, when the game exits or updates, and every 2 minutes while it runs. `scskiller.ini` names the
-game's exe as it was when SCSKiller last found no anti-cheat in its folders, and a game records only while its exe is
-still that one and no anti-cheat is next to it. Uninstalling SCSKiller removes these files and the recordings from every
-game folder, and a scan removes them from a game Steam uninstalled.
-
-**Does it touch my drivers or their settings?** No. It compiles through DirectX, as the game would.
-
-**Do I need an account?** No. Everything the app does on your PC is free. Signing in with Patreon adds the supporter
-features.
-
-**My game isn't detected, or something broke.** Open an [issue](https://github.com/BlueHeisenberg/SCSKiller/issues/new/choose)
-with the bug or game request template.
-
-## Support the project
-
-The app is free and stays free. [Patreon](https://www.patreon.com/SCSKiller) pays for the servers behind the community
-database. Sign in with Patreon in Settings to unlock your tier.
-
-| Tier | You get |
-|---|---|
-| **Patreon supporter** | The community shader hash database, and beta builds |
-| **Patreon backer** | All of that, plus alpha builds and priority on game requests |
-
-## Build from source
-
-Visual Studio 2022 (C++ desktop workload with CMake) and the .NET 10 SDK:
-
-```
-cmake -S proxy -B proxy/build -A x64
-cmake --build proxy/build --config Release
-dotnet build SCSKiller.slnx -c Release
-```
-
-`build/publish.ps1` builds the distribution into `dist\`. Design: [ARCHITECTURE.md](ARCHITECTURE.md). Contributing:
-[CONTRIBUTING.md](CONTRIBUTING.md). Changes: [CHANGELOG.md](CHANGELOG.md). Security issues go through
-[SECURITY.md](SECURITY.md), never a public issue.
-
-## Official links
-
-- GitHub: https://github.com/BlueHeisenberg/SCSKiller
-- Website: https://scskiller.com
-- Patreon: https://www.patreon.com/SCSKiller
-- Discord: https://discord.gg/st7C4yCTcN
-- X: https://x.com/SCSKiller
-
-Anything else claiming to be SCSKiller isn't. Please [report it](https://github.com/BlueHeisenberg/SCSKiller/issues/new/choose).
-
-## Licence
-
-GPL-3.0-or-later ([LICENSE](LICENSE)), with an additional permission for Oodle, the Windows App SDK and graphics driver
-libraries ([LICENSE-EXCEPTION.txt](LICENSE-EXCEPTION.txt)). Third-party components:
-[THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md). Code signing: [CODE_SIGNING_POLICY.md](CODE_SIGNING_POLICY.md).
-
-Not affiliated with any GPU maker, engine maker or game publisher. All product names are trademarks of their owners.
-
-### Forks
-
-Forks are welcome under the licence. Please give yours its own name, say it's unofficial and based on SCSKiller, and
-keep the SCSKiller copyright notices. The measurements and screenshots in this README are SCSKiller's own, so please
-don't present them as a fork's.
-
-Official builds come only from this repository's [Releases](https://github.com/BlueHeisenberg/SCSKiller/releases) page.
-A fork's builds, bugs and anti-cheat behaviour are its author's: SCSKiller keeps its recorder out of anti-cheat games
-except in a session the user confirms, and can't vouch for a fork that changes that.
-
-Improvements are always welcome back here as pull requests. Fixes, games and ideas from forks make SCSKiller better
-for everyone.
+Eğer bir oyun kayıt gerektiriyorsa **Kaydet (Record)** butonunu açın, birkaç dakika oynayın, ardından derleyin.
