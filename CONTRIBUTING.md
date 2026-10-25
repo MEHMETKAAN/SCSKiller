@@ -9,9 +9,10 @@ SCSKiller, kullanıcı tarafından başlatılan özel bir oturum dışında, ant
 ## Derleme Aşaması (Build)
 
 C++ masaüstü iş yükü (MSVC x64, CMake) içeren Visual Studio 2022 ve .NET 10 SDK gereklidir:
-cmake -S proxy -B proxy/build -A x64
-cmake --build proxy/build --config Release
-dotnet build SCSKiller.slnx -c Release
+
+      cmake -S proxy -B proxy/build -A x64
+      cmake --build proxy/build --config Release
+      dotnet build SCSKiller.slnx -c Release
 
 CMake yapılandırması, AMD'nin `amd_ags_x64.dll` dosyasını indirir. Bu dosya olmadan, AGS kullanan oyunların AMD tarafındaki ön derlemeleri düz bir aygıt kullanır.
 
