@@ -1,5 +1,5 @@
-; nvapi64.dll's nvapi_QueryInterface for `selftest nvqi`: int3 padding, then a 2-byte first instruction (the REX form of
-; push, as a compiler's hot-patchable entry) and a sub; FakeNext_NvQiInside stops a thread between the two.
+; `selftest nvqi` için nvapi64.dll'nin nvapi_QueryInterface fonksiyonu: int3 dolgusu, ardından 2 baytlık ilk komut
+; (derleyicinin anında yamanabilir (hot-patchable) girişi olarak push'un REX formu) ve bir sub; FakeNext_NvQiInside bir iş parçacığını ikisi arasında durdurur.
 EXTERN fake_nv_qi:PROC
 EXTERN fake_nv_qi_inside:PROC
 EXTERN FakeNv_OnOpts:PROC
@@ -20,8 +20,8 @@ nvapi_QueryInterface PROC FRAME
     ret
 nvapi_QueryInterface ENDP
 
-; nvapi_QueryInterface(id) by a thread that runs its first instruction here, waits in fake_nv_qi_inside, then goes on at
-; its second.
+; nvapi_QueryInterface(id), ilk komutunu burada çalıştıran, fake_nv_qi_inside içinde bekleyen ve ardından ikinci komutuna devam eden bir
+; iş parçacığı (thread) tarafından çalıştırılır.
 FakeNext_NvQiInside PROC FRAME
     db 40h
     push rbx
@@ -36,8 +36,8 @@ FakeNext_NvQiInside PROC FRAME
     jmp nvapi_QueryInterface + 2
 FakeNext_NvQiInside ENDP
 
-; NvAPI_D3D12_SetCreatePipelineStateOptions for `selftest nvopts`: the driver's first instruction (a 5-byte store), then
-; FakeNv_OnOpts with the caller's arguments.
+; `selftest nvopts` için NvAPI_D3D12_SetCreatePipelineStateOptions: Sürücünün ilk komutu (5 baytlık bir store), ardından
+; arayanın (caller) argümanlarıyla FakeNv_OnOpts.
 ALIGN 16
 FakeNv_SetOpts PROC
     mov [rsp + 18h], rbx
@@ -48,9 +48,9 @@ FakeNv_SetOpts PROC
 FakeNv_SetOpts ENDP
 
 ;
-; Entries the inline hook must leave alone (`selftest nvqi`, as three NVAPI functions the proxy hooks): a 1-byte first
-; instruction, a 2-byte one after only 4 int3, and one after 5 int3 that follow a byte that is neither an int3 nor a ret
-; (they could be the tail of a live instruction's immediate).
+; Satıriçi kancanın (inline hook) yalnız bırakması gereken girişler (proxy'nin kancaladığı üç NVAPI işlevi olarak `selftest nvqi`): 
+; 1 baytlık ilk komut, sadece 4 int3'ten sonra 2 baytlık bir komut ve int3 veya ret olmayan bir bayttan (canlı bir komutun 
+; ara (immediate) kısmının kuyruğu olabilirler) sonra 5 int3'ün ardındaki bir komut.
 ALIGN 16
     db 16 dup (0CCh)
 FakeNv_OneByte PROC
@@ -82,8 +82,8 @@ FakeNv_LivePad PROC
     ret
 FakeNv_LivePad ENDP
 
-; An entry another hooker patches while the proxy hooks it (`selftest nvqi`, SCSKILLER_TEST_HOOK_RACE): a 5-byte first
-; instruction that its jmp replaces.
+; Başka bir kancalayıcının proxy onu kancalarken yamaladığı bir giriş (`selftest nvqi`, SCSKILLER_TEST_HOOK_RACE): 
+; jmp'nin değiştirdiği 5 baytlık ilk komut.
 ALIGN 16
 FakeNv_Raced PROC
     mov [rsp + 8], rbx
@@ -91,8 +91,8 @@ FakeNv_Raced PROC
     ret
 FakeNv_Raced ENDP
 
-; FidelityFX's ffxCreateContext for `selftest framesfg ffx`: the loader's hot-patch padding and a 3-byte first instruction,
-; then fake_ffx_create.
+; `selftest framesfg ffx` için FidelityFX'in ffxCreateContext'i: yükleyicinin anında yama (hot-patch) dolgusu ve 3 baytlık
+; ilk komut, ardından fake_ffx_create.
 ALIGN 16
     db 16 dup (0CCh)
 ffxCreateContext PROC
