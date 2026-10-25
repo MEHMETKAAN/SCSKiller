@@ -1,16 +1,8 @@
 SCSKiller
-Copyright (C) 2026 The SCSKiller authors
+Telif Hakkı (C) 2026 SCSKiller yazarları
 
-This program is free software: you can redistribute it and/or modify it under
-the terms of the GNU General Public License as published by the Free Software
-Foundation, either version 3 of the License, or (at your option) any later
-version. See LICENSE.
+Bu program ücretsiz bir yazılımdır: Özgür Yazılım Vakfı (Free Software Foundation) tarafından yayımlanan GNU Genel Kamu Lisansı'nın 3. sürümü veya (isteğinize bağlı olarak) daha sonraki herhangi bir sürümü koşulları altında yeniden dağıtabilir ve/veya değiştirebilirsiniz. Bkz. LICENSE.
 
-Additional permission under GNU GPL version 3 section 7
+GNU GPL sürüm 3 bölüm 7 kapsamında ek izin:
 
-If you modify this program, or any covered work, by linking or combining it
-with the Oodle compression library, the Microsoft Windows App SDK (including
-WinUI), or the graphics driver libraries of NVIDIA, AMD or Intel (or modified
-versions of any of these), containing parts covered by the terms of their own
-licenses, the licensors of this program grant you additional permission to
-convey the resulting work.
+Bu programı veya kapsanan herhangi bir çalışmayı; Oodle sıkıştırma kütüphanesi, Microsoft Windows App SDK (WinUI dahil) veya NVIDIA, AMD ya da Intel'in grafik sürücü kütüphaneleriyle (veya bunların değiştirilmiş sürümleriyle) kendi lisanslarının şartları kapsamındaki parçaları içerecek şekilde bağlayarak veya birleştirerek değiştirirseniz, bu programın lisansörleri size ortaya çıkan çalışmayı iletmeniz (convey) için ek izin verir.
