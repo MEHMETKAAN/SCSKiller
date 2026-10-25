@@ -1,56 +1,47 @@
-# Code signing policy
+# Kod imzalama politikası
 
-## Status
+## Durum
 
-SCSKiller has applied for free code signing from the [SignPath Foundation](https://signpath.org). Until it's granted,
-releases are **unsigned** and Windows shows "Unknown publisher". Each release lists the SHA-256 of its downloads.
+SCSKiller, [SignPath Foundation](https://signpath.org) üzerinden ücretsiz kod imzalama başvurusunda bulunmuştur. Onaylanana kadar sürümler **imzasızdır** ve Windows "Bilinmeyen yayıncı" uyarısı verir. Her sürüm, indirmelerinin SHA-256 değerini listeler.
 
-## What is signed
+## Neler imzalanır
 
-Only binaries built from this repository's source by its GitHub Actions release workflow, from a stable release tag
-(`vX.Y.Z`):
+Yalnızca bu deponun kaynak kodundan GitHub Actions sürüm iş akışı (workflow) tarafından, kararlı bir sürüm etiketinden (`vX.Y.Z`) derlenen ikili dosyalar (binaries):
 
-- `SCSKiller.exe` (the app)
-- `cli\scskiller.exe` and `cli\scskillerw.exe` (the command line)
-- `native\scskiller_warm.exe` and `native\segheap\scskiller_warm.exe` (the compiler that runs outside the game)
-- `native\d3d12.dll` (the optional recorder)
-- `SCSKiller-Setup.exe` and `Update.exe` (Velopack)
+- `SCSKiller.exe` (uygulama)
+- `cli\scskiller.exe` ve `cli\scskillerw.exe` (komut satırı)
+- `native\scskiller_warm.exe` ve `native\segheap\scskiller_warm.exe` (oyun dışında çalışan derleyici)
+- `native\d3d12.dll` (isteğe bağlı kaydedici)
+- `SCSKiller-Setup.exe` ve `Update.exe` (Velopack)
 
-Upstream binaries and runtimes in the package (the .NET runtime, the Windows App SDK, Velopack's own components, AMD's
-`native\amd_ags_x64.dll`) aren't signed by this project. Alpha and beta builds aren't built here and aren't signed under
-this policy. Every signed file carries the product name `SCSKiller` and the release's version.
+Paketteki yukarı akış ikili dosyaları ve çalışma zamanları (.NET runtime, Windows App SDK, Velopack'in kendi bileşenleri, AMD'nin `native\amd_ags_x64.dll` dosyası) bu proje tarafından imzalanmaz. Alfa ve beta yapıları burada derlenmez ve bu politika kapsamında imzalanmaz. İmzalanan her dosya `SCSKiller` ürün adını ve sürüm numarasını taşır.
 
-## Roles
+## Roller
 
-| Role | Who |
+| Rol | Kim |
 |---|---|
-| Author (commits to the source repository) | [the maintainer](https://github.com/BlueHeisenberg) |
-| Reviewer (reviews every external contribution before it's merged) | the maintainer |
-| Approver (approves each signing request) | the maintainer |
+| Yazar (kaynak depoya commit yapar) | [Proje Sorumlusu (maintainer)](https://github.com/BlueHeisenberg) |
+| İnceleyici (birleştirilmeden önce her dış katkıyı inceler) | Proje Sorumlusu |
+| Onaylayıcı (her imzalama isteğini onaylar) | Proje Sorumlusu |
 
-Contributions are reviewed in public pull requests before they're merged ([CONTRIBUTING.md](CONTRIBUTING.md)). Every
-signing request is approved by hand. All members use multi-factor authentication on GitHub and SignPath.
+Katkılar, birleştirilmeden önce herkese açık pull request'lerde (PR) incelenir ([CONTRIBUTING.md](CONTRIBUTING.md)). Her imzalama isteği manuel olarak onaylanır. Tüm üyeler GitHub ve SignPath üzerinde çok faktörlü kimlik doğrulama (MFA) kullanır.
 
-## Privacy
+## Gizlilik
 
-SCSKiller sends nothing about you, your PC or your games unless you ask it to. It connects to:
+SCSKiller, siz istemediğiniz sürece sizinle, bilgisayarınızla veya oyunlarınızla ilgili hiçbir şey göndermez. Şuralara bağlanır:
 
-- the SCSKiller service (`api.scskiller.com`, fallback `api.scskiller.io`):
-  - for the welcome text, the list of games known to stutter and the community database's index (nothing about you is
-    sent)
-  - to sign in with Patreon
-  - for signed-in supporters, to download the community recordings of your games' builds, and on the alpha or beta
-    channel to check for those updates
-  - only with "Share my shader hashes" on, to upload your recordings' hash-only form (no shader code) under an
-    anonymous device not linked to your account
-  - only when you press Send in a game's "Report a problem", to send the report it shows you (kept 90 days)
-- `dl.scskiller.io`, for alpha and beta updates
-- GitHub Releases, for stable updates
-- public GitHub-hosted sources, for a decompression library (Oodle) or an archive key a game needs, the first time it's
-  needed.
+- SCSKiller hizmeti (`api.scskiller.com`, yedek `api.scskiller.io`):
+  - karşılama metni, takılma yaptığı bilinen oyunların listesi ve topluluk veritabanının dizini için (hakkınızda hiçbir şey gönderilmez)
+  - Patreon ile giriş yapmak için
+  - giriş yapmış destekçiler için, oyunlarınızın yapılarının topluluk kayıtlarını indirmek ve alfa/beta kanalındaysa bu güncellemeleri kontrol etmek için
+  - yalnızca "Shader hash değerlerimi paylaş" açıksa, kayıtlarınızın yalnızca hash halini (shader kodu olmadan), hesabınızla bağlantılı olmayan anonim bir cihaz altında yüklemek için
+  - yalnızca bir oyunun "Sorun bildir" kısmında Gönder'e bastığınızda, size gösterdiği raporu göndermek için (90 gün saklanır)
+- `dl.scskiller.io`, alfa ve beta güncellemeleri için
+- GitHub Releases, kararlı güncellemeler için
+- Herkese açık GitHub barındırmalı kaynaklar, bir sıkıştırma kütüphanesi (Oodle) veya oyunun ihtiyaç duyduğu bir arşiv anahtarı ilk kez gerektiğinde.
 
-Shaders and recordings stay on your PC unless you turn sharing on. Frame times always stay on your PC.
+Siz paylaşımı açmadığınız sürece shader'lar ve kayıtlar PC'nizde kalır. Kare süreleri (Frame times) her zaman PC'nizde kalır.
 
-## Reporting
+## Bildirim
 
-Report a signed binary you believe is malicious or misused through [SECURITY.md](SECURITY.md).
+Kötü amaçlı veya yanlış kullanıldığına inandığınız imzalı bir ikili dosyayı [SECURITY.md](SECURITY.md) aracılığıyla bildirin.
