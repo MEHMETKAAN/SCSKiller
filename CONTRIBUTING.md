@@ -1,48 +1,23 @@
-# Contributing
+# Katkıda Bulunma
 
-Bugs and game requests go in Issues, with the templates. Security problems go through [SECURITY.md](SECURITY.md), never
-a public issue.
+Hatalar ve oyun istekleri, mevcut şablonlar kullanılarak Issues (Sorunlar) sekmesine yazılmalıdır. Güvenlik sorunları asla herkese açık bir sorun olarak değil, doğrudan [SECURITY.md](SECURITY.md) üzerinden özel olarak iletilmelidir.
 
-## Anti-cheat games
+## Anti-hile Oyunları
 
-Outside a session SCSKiller never touches a game with anti-cheat beyond reading its files: no recorder, no injection,
-no opening its processes. A session (ARCHITECTURE.md, Rules) is opted into per game, confirmed per launch, started by
-SCSKiller, recorded in that process alone and cleaned up at exit: without EasyAntiCheat for the games listed in
-`src/SCSKiller.Core/Games/offline-eac.json`, or in any other supported game with anti-cheat when the user turned on
-"Allow the recorder in games with anti-cheat (at your own risk)". Changes that widen it past a confirmed session or
-work around the rule aren't accepted.
+SCSKiller, kullanıcı tarafından başlatılan özel bir oturum dışında, anti-hile içeren bir oyuna asla dokunmaz ve sadece dosyalarını okur: kaydedici yüklemez, enjeksiyon yapmaz, süreçlerini (process) açmaz. Bir oturum (Bkz. ARCHITECTURE.md, Kurallar) her oyun için özel olarak seçilir, her başlatmada onaylanır, SCSKiller tarafından başlatılır, yalnızca o süreçte kayıt yapar ve çıkışta kendini temizler. (Örn: `src/SCSKiller.Core/Games/offline-eac.json` listesindeki oyunlar için EasyAntiCheat olmadan veya kullanıcının Ayarlar'dan izin vermesi durumunda). Kaydedicinin yetkilerini bu sınırların ötesine genişleten veya kuralların etrafından dolanan kod değişiklikleri (Pull Request) kabul edilmeyecektir.
 
-## How pull requests are merged
+## Derleme Aşaması (Build)
 
-Pull requests are reviewed here in public. This repository is updated once per release, so an accepted PR is applied to
-the development tree with your authorship kept and ships in the next release. The release commit credits you with a
-`Co-authored-by` line, the changelog thanks you by handle, and the PR is closed with a link to that commit.
-
-## Sign-off (DCO)
-
-Every commit needs a `Signed-off-by` line (`git commit -s`), certifying the
-[Developer Certificate of Origin](https://developercertificate.org/): you wrote the change or have the right to submit
-it under this project's licence. Use the commit author's name and email (a GitHub noreply address is fine). Commits
-without it can't be merged. Contributions are licensed under GPL-3.0-or-later with the additional permission in
-[LICENSE-EXCEPTION.txt](LICENSE-EXCEPTION.txt).
-
-## Build
-
-Visual Studio 2022 with the C++ desktop workload (MSVC x64, CMake), and the .NET 10 SDK:
-
-```
+C++ masaüstü iş yükü (MSVC x64, CMake) içeren Visual Studio 2022 ve .NET 10 SDK gereklidir:
 cmake -S proxy -B proxy/build -A x64
 cmake --build proxy/build --config Release
 dotnet build SCSKiller.slnx -c Release
-```
 
-The CMake configure downloads AMD's `amd_ags_x64.dll`, pinned by SHA-256. Without it, AMD warms of AGS games use a plain
-device.
+CMake yapılandırması, AMD'nin `amd_ags_x64.dll` dosyasını indirir. Bu dosya olmadan, AGS kullanan oyunların AMD tarafındaki ön derlemeleri düz bir aygıt kullanır.
 
-## Style
+## Kod Stili
 
-- Match the code around your change. One topic per PR, kept small.
-- Comment only what the code can't say: a non-obvious reason, an invariant, a driver or engine workaround, a file-format
-  detail, a measured fact. No commented-out code.
-- Add a line under `## [Unreleased]` in [CHANGELOG.md](CHANGELOG.md) for anything a user would notice.
-- Don't commit game files, shader dumps, recordings (`*.db`) or third-party binaries.
+- Yaptığınız değişikliği etrafındaki kodun mimarisine uydurun. Her PR için yalnızca bir konu belirleyin ve küçük tutun.
+- Sadece kodun tek başına anlatamadığı şeyleri yorum satırı yapın: doğrudan anlaşılamayan bir sebep, sürücü/motor geçici çözümleri veya dosya biçimi detayları gibi. Yorum satırına alınmış (kullanılmayan) kodlar bırakmayın.
+- Kullanıcının fark edeceği her türlü değişiklik için [CHANGELOG.md](CHANGELOG.md) dosyasına `## [Unreleased]` başlığı altına bir satır ekleyin.
+- Oyun dosyalarını, shader dökümlerini, kayıtları (`*.db`) veya üçüncü taraf derlenmiş dosyaları (binaries) projenin içine dahil etmeyin (commit'lemeyin).
