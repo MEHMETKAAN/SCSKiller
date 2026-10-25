@@ -1,11 +1,11 @@
-// Test stand-in for a mod's d3d12.dll that the proxy chains to (scskiller.ini next=): forwards D3D12CreateDevice to the
-// system dll and counts the calls. Only D3D12CreateDevice, like many wrappers: the proxy takes the rest from the system dll.
-// After FakeNext_SwapPs it acts like a shader-replacing wrapper (ReShade with a RenoDX addon): the game gets a wrapper
-// device whose CreateGraphicsPipelineState passes the desc on with that pixel shader instead of the game's.
-// After FakeNext_Layer it is a layer like ReShade as dxgi.dll instead: see there.
-// Never shipped (build/publish.ps1 copies named files only); `selftest chain` loads it.
+// Proxy'nin zincirlendiği bir modun d3d12.dll'i (scskiller.ini next=) için test kopyası: D3D12CreateDevice'ı sistem 
+// dll'ine yönlendirir ve çağrıları sayar. Sadece D3D12CreateDevice, birçok sarmalayıcı (wrapper) gibi: proxy geri kalanı sistem dll'inden alır.
+// FakeNext_SwapPs'den sonra, shader değiştiren bir sarmalayıcı (RenoDX eklentili ReShade) gibi davranır: oyun, 
+// CreateGraphicsPipelineState fonksiyonu desc'i oyununki yerine o piksel shader'ı ile aktaran bir sarmalayıcı cihazı (wrapper device) alır.
+// FakeNext_Layer'dan sonra ise dxgi.dll olarak bir ReShade katmanı (layer) gibidir: Oraya bakın.
+// Asla yayınlanmaz (build/publish.ps1 yalnızca adlandırılmış dosyaları kopyalar); `selftest chain` bunu yükler.
 #include <windows.h>
-#define D3D12CreateDevice D3D12CreateDevice_h  // d3d12.h declares it without dllexport
+#define D3D12CreateDevice D3D12CreateDevice_h  // d3d12.h dllexport olmadan bildirir
 #include <d3d12.h>
 #include <dxgi1_2.h>
 #undef D3D12CreateDevice
@@ -23,11 +23,11 @@ static const GUID kUnwrapped = {0x7f2c9a11, 0x3b4e, 0x4d6a, {0x81, 0x2f, 0x5e, 0
 
 extern "C" __declspec(dllexport) LONG WINAPI FakeNext_Calls() { return g_calls; }
 extern "C" __declspec(dllexport) void WINAPI FakeNext_SwapPs(const void* p, SIZE_T n) { g_ps.assign((const char*)p, n); }
-// Copied as a game's D3D12\D3D12Core.dll: an Agility runtime newer than any system's that makes no device (WarmerTests)
+// Bir oyunun D3D12\D3D12Core.dll'i olarak kopyalandı: Cihaz (device) oluşturmayan, herhangi bir sisteminkinden daha yeni bir Agility çalışma zamanı (WarmerTests)
 extern "C" __declspec(dllexport) const UINT D3D12SDKVersion = 100000;
 
-// The wrapper: every slot forwards to the same slot of the wrapped device (a thunk swaps `this`), but QueryInterface and
-// CreateGraphicsPipelineState. 128 slots cover ID3D12Device14.
+// Sarmalayıcı (wrapper): QueryInterface ve CreateGraphicsPipelineState dışında her yuva, sarmalanan aygıtın aynı yuvasına yönlendirir 
+// (bir thunk `this`i değiştirir). 128 yuva ID3D12Device14'ü kapsar.
 struct Wrap {
     void** vt;
     ID3D12Device* real;
@@ -36,7 +36,7 @@ struct Wrap {
 static HRESULT STDMETHODCALLTYPE wrap_qi(Wrap* w, REFIID riid, void** pp) {
     if (g_unwrap && riid == kUnwrapped) return w->real->AddRef(), *pp = w->real, S_OK;
     HRESULT hr = w->real->QueryInterface(riid, pp);
-    if (SUCCEEDED(hr) && *pp == w->real) *pp = w;  // every device interface stays the wrapper, as ReShade's do
+    if (SUCCEEDED(hr) && *pp == w->real) *pp = w;  // ReShade'de olduğu gibi her cihaz arayüzü sarmalayıcıda kalır
     return hr;
 }
 
@@ -52,7 +52,7 @@ static HMODULE system_d3d12() {
     return LoadLibraryW((std::wstring(sys) + L"\\d3d12.dll").c_str());
 }
 
-// RenoDX's injection: a root constant (b13, space 50) appended to every root signature, serialized anew.
+// RenoDX'in enjeksiyonu: Her kök imzasına eklenen, yeniden serileştirilen bir kök sabiti (root constant) (b13, space 50).
 static HRESULT STDMETHODCALLTYPE wrap_rs(Wrap* w, UINT mask, const void* blob, SIZE_T n, REFIID riid, void** pp) {
     if (!g_rewrite_rs) return w->real->CreateRootSignature(mask, blob, n, riid, pp);
     static HMODULE sys = system_d3d12();
@@ -75,7 +75,7 @@ static HRESULT STDMETHODCALLTYPE wrap_rs(Wrap* w, UINT mask, const void* blob, S
     return hr;
 }
 
-// A vtable whose every slot forwards to the same slot of the object at offset 8.
+// Her yuvası, ofset 8'deki nesnenin aynı yuvasına yönlendiren bir vtable.
 static void** forward_vtable() {
     const int n = 128;
     auto code = (uint8_t*)VirtualAlloc(nullptr, n * 16, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
@@ -100,9 +100,9 @@ static void** wrapper_vtable() {
     return vt;
 }
 
-// Copied as dxgi.dll beside selftest.exe (`selftest framesmod`): a mod's dxgi.dll like ReShade's, which forwards to
-// System32's. CreateDXGIFactory1's factory is its own object around System32's (every call forwarded, interfaces from
-// QueryInterface included, so it stays the wrapper). The wrapper itself is leaked: a test process.
+// selftest.exe'nin yanında dxgi.dll olarak kopyalanır (`selftest framesmod`): ReShade gibi System32'ninkine yönlendiren
+// bir modun dxgi.dll'i. CreateDXGIFactory1'in fabrikası (factory) System32'nin (yönlendirilen her arama, QueryInterface'den gelen
+// arayüzler dahil, böylece sarmalayıcı olarak kalır) etrafındaki kendi nesnesidir. Sarmalayıcının (wrapper) kendisi sızdırılmıştır (leaked): bir test süreci.
 static HMODULE system_dxgi() {
     wchar_t sys[MAX_PATH];
     GetSystemDirectoryW(sys, MAX_PATH);
@@ -144,16 +144,17 @@ extern "C" __declspec(dllexport) HRESULT WINAPI D3D12CreateDevice(IUnknown* adap
     ID3D12Device* dev = nullptr;
     HRESULT hr = real(adapter, fl, IID_PPV_ARGS(&dev));
     if (FAILED(hr)) return hr;
-    auto w = new Wrap{wrapper_vtable(), dev};  // leaked: a test process
+    auto w = new Wrap{wrapper_vtable(), dev};  // sızdırıldı (leaked): bir test süreci
     hr = wrap_qi(w, riid, pp);
     dev->Release();
     return hr;
 }
 
-// FakeNext_Layer: a layer like ReShade as dxgi.dll with a RenoDX addon. Loaded before the proxy, it points the system
-// d3d12.dll's D3D12CreateDevice export here (its export table entry: ReShade patches the code instead, and the proxy reaches
-// either the same way), and the device comes wrapped with root signatures rewritten (wrap_rs). unwrap: the wrapper answers
-// IID_UnwrappedObject with the real device, as ReShade 6.8 does; without it the proxy finds the real device another way.
+// FakeNext_Layer: RenoDX eklentisiyle dxgi.dll olarak bir ReShade gibi katman (layer). Proxy'den önce yüklendiğinde, sistem 
+// d3d12.dll'inin D3D12CreateDevice dışa aktarımını buraya işaret eder (dışa aktarım tablosu girişi: ReShade bunun yerine kodu yamalar, 
+// ve proxy her iki şekilde de ulaşır), ve aygıt (device) kök imzaları yeniden yazılmış halde sarmalanmış olarak gelir (wrap_rs). 
+// unwrap (açma): sarmalayıcı IID_UnwrappedObject öğesini ReShade 6.8'in yaptığı gibi gerçek aygıtla yanıtlar; 
+// bu olmadan proxy gerçek cihazı başka bir yoldan bulur.
 static decltype(&D3D12CreateDevice_h) g_sys_create;
 
 static HRESULT WINAPI layer_create(IUnknown* adapter, D3D_FEATURE_LEVEL fl, REFIID riid, void** pp) {
@@ -161,7 +162,7 @@ static HRESULT WINAPI layer_create(IUnknown* adapter, D3D_FEATURE_LEVEL fl, REFI
     ID3D12Device* dev = nullptr;
     HRESULT hr = g_sys_create(adapter, fl, IID_PPV_ARGS(&dev));
     if (FAILED(hr)) return hr;
-    auto w = new Wrap{wrapper_vtable(), dev};  // leaked: a test process
+    auto w = new Wrap{wrapper_vtable(), dev};  // sızdırıldı (leaked): bir test süreci
     hr = wrap_qi(w, riid, pp);
     dev->Release();
     return hr;
@@ -180,7 +181,7 @@ extern "C" __declspec(dllexport) BOOL WINAPI FakeNext_Layer(BOOL unwrap) {
         if (strcmp((const char*)base + names[i], "D3D12CreateDevice")) continue;
         DWORD* slot = &fns[ords[i]];
         g_sys_create = (decltype(g_sys_create))(base + *slot);
-        // the table holds 32-bit offsets from the image base: a jump stub past the image, within reach
+        // tablo, imaj (image) tabanından 32 bit ofsetleri tutar: imajı geçen bir atlama parçası (jump stub), ulaşılabilir durumda
         uint8_t* stub = nullptr;
         for (uintptr_t a = ((uintptr_t)base + nt->OptionalHeader.SizeOfImage + 0xFFFF) & ~(uintptr_t)0xFFFF; !stub && a < (uintptr_t)base + 0x7FFF0000; a += 0x10000)
             stub = (uint8_t*)VirtualAlloc((void*)a, 4096, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
@@ -197,10 +198,10 @@ extern "C" __declspec(dllexport) BOOL WINAPI FakeNext_Layer(BOOL unwrap) {
     return FALSE;
 }
 
-// FidelityFX's ffxCreateContext for `selftest framesfg ffx` (the test copies this dll as amd_fidelityfx_loader_dx12.dll):
-// a FOR_HWND frame generation swap chain desc (type 0x30006) gets a stand-in swap chain, its vtable read-only data here,
-// whose Present presents the real one on the calling thread (FSR 3 generating nothing, as in menus), then twice from
-// another thread (a rendered and a generated frame).
+// `selftest framesfg ffx` (test bu dll'i amd_fidelityfx_loader_dx12.dll olarak kopyalar) için FidelityFX'in ffxCreateContext öğesi:
+// bir FOR_HWND kare oluşturma (frame generation) takas zinciri tanımlayıcısı (tip 0x30006) bir vekil takas zinciri (stand-in swap chain) alır,
+// kendi vtable salt okunur verileri buradadır, bunun Present metodu çağıran iş parçacığında gerçek olanı sunar (menülerde olduğu gibi FSR 3 hiçbir şey üretmez),
+// ardından başka bir iş parçacığından iki kez daha sunar (oluşturulmuş ve işlenmiş bir kare).
 struct FgChain {
     const void* const* vt;
     IDXGISwapChain1* real;
@@ -227,7 +228,7 @@ struct FgForHwnd {
     IDXGIFactory* factory;
     ID3D12CommandQueue* queue;
 };
-extern "C" uint32_t fake_ffx_create(void** ctx, FgForHwnd* d, const void*) {  // ffxCreateContext (fakenext.asm) jumps here
+extern "C" uint32_t fake_ffx_create(void** ctx, FgForHwnd* d, const void*) {  // ffxCreateContext (fakenext.asm) buraya atlar
     if (!d || (uint32_t)d->type != 0x30006) return 1;
     ID3D12Device* dev = nullptr;
     IDXGIFactory2* f2 = nullptr;
@@ -243,14 +244,14 @@ extern "C" uint32_t fake_ffx_create(void** ctx, FgForHwnd* d, const void*) {  //
     return 0;
 }
 
-// NVAPI's nvapi_QueryInterface for `selftest nvqi` (the test loads a copy as nvapi64.dll): 0x5EE000nn resolves to its own
-// function, 0x5EE100nn to the same one by resolving 0x5EE000nn through the exported entry from inside this resolution (a
-// layer that resolves through whatever hooked the entry), every other id to none.
+// `selftest nvqi` için NVAPI'nin nvapi_QueryInterface'i (test bir kopyasını nvapi64.dll olarak yükler): 0x5EE000nn kendi işlevine çözümlenir, 
+// 0x5EE100nn, 0x5EE000nn'i bu çözümlemenin içinden dışa aktarılan girdi yoluyla (girdiyi kancalayan (hooked) her neyse onun üzerinden 
+// çözümleyen bir katman) çözümleyerek aynı işleve bağlanır, diğer tüm kimlikler boştur.
 static char g_nv_fns[16];
 extern "C" void* nvapi_QueryInterface(uint32_t id);
 #pragma comment(linker, "/EXPORT:nvapi_QueryInterface")
 #pragma comment(linker, "/EXPORT:ffxCreateContext")
-// `selftest nvopts`: NvAPI_Initialize and SetCreatePipelineStateOptions, which keeps the flags of each call it accepts for FakeNv_Opts.
+// `selftest nvopts`: NvAPI_Initialize ve SetCreatePipelineStateOptions; FakeNv_Opts için kabul ettiği her çağrının bayraklarını (flags) tutar.
 static std::mutex g_nv_mx;
 static std::vector<uint32_t> g_nv_opts;
 extern "C" void FakeNv_SetOpts();
@@ -272,7 +273,7 @@ extern "C" __declspec(dllexport) int WINAPI FakeNv_Opts(uint32_t* out, int max) 
     return n;
 }
 
-// `selftest nvqi`: a thread inside nvapi_QueryInterface, past its first instruction, while the proxy hooks it.
+// `selftest nvqi`: nvapi_QueryInterface içinde, proxy onu kancalarken ilk komutunu geçmiş bir iş parçacığı (thread).
 static std::atomic<int> g_nv_inside;
 extern "C" void fake_nv_qi_inside() {
     g_nv_inside = 1;
@@ -280,7 +281,7 @@ extern "C" void fake_nv_qi_inside() {
     g_nv_inside.wait(1);
 }
 #pragma comment(linker, "/EXPORT:FakeNext_NvQiInside")
-extern "C" __declspec(dllexport) void WINAPI FakeNext_NvQiHold(bool release) {  // false: until a thread is inside; true: it goes on
+extern "C" __declspec(dllexport) void WINAPI FakeNext_NvQiHold(bool release) {  // false: bir iş parçacığı içeri girene kadar; true: devam eder
     if (!release) g_nv_inside.wait(0);
     else g_nv_inside = 2, g_nv_inside.notify_all();
 }
@@ -297,9 +298,9 @@ extern "C" void* fake_nv_qi(uint32_t id) {
     return nullptr;
 }
 
-// After FakeNext_NvAtExit, this dll's process detach resolves 16 ids it never resolved before and the 16 known ones
-// through the exported entry (a dll that detaches after the proxy, loaded before it, calling NVAPI at process exit), then
-// makes nv_at_exit.done beside itself.
+// FakeNext_NvAtExit'ten sonra, bu dll'nin süreç ayrılması (process detach), daha önce hiç çözülmemiş 16 kimliği (id) ve
+// bilinen 16 kimliği dışa aktarılan (exported) girdi aracılığıyla (proxy'den önce yüklenen, işlem çıkışında NVAPI'yi çağıran
+// ve proxy'den sonra ayrılan bir dll) çözer, ardından kendisinin yanına nv_at_exit.done yapar.
 static bool g_nv_at_exit;
 extern "C" __declspec(dllexport) void WINAPI FakeNext_NvAtExit() { g_nv_at_exit = true; }
 BOOL WINAPI DllMain(HINSTANCE self, DWORD reason, LPVOID reserved) {
