@@ -1,17 +1,16 @@
-# The test suite as several test processes at once, each running its share of the tests, the serial Timing collection
-# included. Everything a test shares with another test runs in one process (static state, process names, the ledger and
-# mutex scope, temp folders are all per process), so processes can't clash where tests of one process would.
-# AppTests goes by the first letters of its test names, in shares of about the same time; the last share takes the rest.
-# $Alone: tests that race with themselves under load, run after the shares with nothing beside them.
+# Test paketi, her biri testlerin kendine düşen kısmını çalıştıran birden fazla test işlemi olarak aynı anda çalıştırılır; seri Timing koleksiyonu dahildir. 
+# Bir testin diğer bir testle paylaştığı her şey tek bir işlemde (process) çalışır (statik durum, işlem adları, defter (ledger) ve mutex kapsamı, geçici klasörlerin tümü işlem başınadır), böylece bir işlemin testlerinin yapılacağı yerlerde işlemler çakışamaz.
+# AppTests, test adlarının ilk harflerine göre, yaklaşık olarak aynı sürelik paylara bölünür; son pay ise geri kalanı alır.
+# $Alone: yük altında kendi kendisiyle yarışan (race) testler, yanlarında hiçbir şey olmadan paylardan sonra çalıştırılır.
 param(
     [string]$Filter = 'Needs!=Gpu&Needs!=Game',
     [string]$Configuration = 'Release',
-    [switch]$List   # print each share's test count instead of running them
+    [switch]$List   # çalıştırmak yerine her payın (share) test sayısını yazdır
 )
 $ErrorActionPreference = 'Stop'
 
 $dll = Join-Path $PSScriptRoot "..\tests\SCSKiller.Tests\bin\$Configuration\net10.0-windows\SCSKiller.Tests.dll"
-if (-not (Test-Path $dll)) { throw "not built: $dll" }
+if (-not (Test-Path $dll)) { throw "Derlenmemiş (not built): $dll" }
 
 $app = 'FullyQualifiedName~Platform.AppTests.'
 $appShares = @(
@@ -41,18 +40,18 @@ function Run($names) {
         $a += if ($List) { '--list-tests' } else { @('--logger', '"console;verbosity=normal"', '--', 'RunConfiguration.TreatNoTestsAsError=true') }
         $p = Start-Process dotnet -ArgumentList $a -NoNewWindow -PassThru `
             -RedirectStandardOutput (Join-Path $out "$name.log") -RedirectStandardError (Join-Path $out "$name.err")
-        $null = $p.Handle   # keeps the exit code readable after the process ends
+        $null = $p.Handle   # işlem sona erdikten sonra çıkış kodunu okunabilir tutar
         [pscustomobject]@{ Name = $name; Process = $p }
     }
     foreach ($r in $runs) {
         $r.Process.WaitForExit()
         $log = Get-Content (Join-Path $out "$($r.Name).log")
-        if ($List) { "$($r.Name): $(@($log | Where-Object { $_ -match '^\s{4}\S' }).Count) tests, exit $($r.Process.ExitCode)" }
+        if ($List) { "$($r.Name): $(@($log | Where-Object { $_ -match '^\s{4}\S' }).Count) test, $($r.Process.ExitCode) koduyla çıkış yaptı" }
         else {
             "::group::$($r.Name)"
             $log
             '::endgroup::'
-            "$($r.Name): exit $($r.Process.ExitCode) in $([int]($r.Process.ExitTime - $r.Process.StartTime).TotalSeconds) s"
+            "$($r.Name): $([int]($r.Process.ExitTime - $r.Process.StartTime).TotalSeconds) saniye içinde $($r.Process.ExitCode) koduyla çıkış yaptı"
         }
         Get-Content (Join-Path $out "$($r.Name).err")
         if ($r.Process.ExitCode -ne 0) { $script:failed += $r.Name }
@@ -63,4 +62,4 @@ Run @($shares.Keys)
 $shares['alone'] = '(' + (($alone | ForEach-Object { "FullyQualifiedName~$_" }) -join '|') + ')'
 Run @('alone')
 Remove-Item -Recurse -Force $out
-if ($failed) { "failed: $($failed -join ', ')"; exit 1 }
+if ($failed) { "Başarısız oldu: $($failed -join ', ')"; exit 1 }
