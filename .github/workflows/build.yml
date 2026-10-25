@@ -1,8 +1,8 @@
-# Build, test and package on a clean Windows runner.
-# One file serves both repos. Private repo: PRs, workflow_dispatch, the nightly schedule (skipped when main didn't
-# change) and release tags (release.yml), every job on the runner the repository variable SCSK_RUNNER names (the team's
-# self-hosted Windows runner). Public repo: only release tags build, GitHub-hosted, without tests (the suite already
-# passed on the private repo, and a hosted runner has no Steam or GPU).
+# Temiz bir Windows çalıştırıcısında (runner) derle, test et ve paketle.
+# Tek bir dosya her iki depoya da hizmet eder. Gizli (Private) depo: PR'lar, workflow_dispatch, gecelik program (main
+# değişmediğinde atlanır) ve sürüm etiketleri (release.yml), SCSK_RUNNER depo değişkeninin adlandırdığı çalıştırıcıdaki
+# her görev (ekibin kendi barındırdığı Windows çalıştırıcısı). Açık (Public) depo: testler olmadan yalnızca GitHub
+# barındırmalı sürüm etiketleri derlenir (test paketi gizli depoda zaten geçti ve barındırılan bir çalıştırıcının Steam'i veya GPU'su yoktur).
 name: build
 
 on:
@@ -11,28 +11,28 @@ on:
     paths-ignore: ['**.md']
   pull_request:
     branches: [main, 'release/**']
-    paths-ignore: ['**.md', 'docs*/**', 'tools*/linux/**']   # nothing the Windows build or tests use ('*': not read as a private path by the export's leak scan)
+    paths-ignore: ['**.md', 'docs*/**', 'tools*/linux/**']   # Windows derlemesinin veya testlerinin kullandığı hiçbir şey yok ('*': dışa aktarmanın sızıntı taraması tarafından gizli bir yol olarak okunmaz)
   schedule:
-    - cron: '17 3 * * *'   # nightly, 03:17 UTC
+    - cron: '17 3 * * *'   # gecelik, 03:17 UTC
   workflow_dispatch:
     inputs:
       filter:
-        description: 'Only the tests this dotnet test filter selects (e.g. FullyQualifiedName~SomeTest), no publish'
+        description: 'Sadece bu dotnet test filtresinin seçtiği testler (örn. FullyQualifiedName~SomeTest), yayınlama (publish) yok'
         required: false
         default: ''
   workflow_call:   # release.yml
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  # a main run finishes instead of being cancelled by the next merge; queued main runs collapse to the newest
+  # bir main çalıştırması sonraki birleştirmeyle (merge) iptal edilmek yerine tamamlanır; sıraya alınmış main çalıştırmaları en yenisine daraltılır
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read
 
 jobs:
-  # Nightly only: did main get a commit in the last 25 h? (Linux, 1x minutes, a few seconds.) Not a numeric output:
-  # expressions coerce a skipped job's null and '0' both to 0.
+  # Yalnızca gecelik: main son 25 saat içinde bir commit aldı mı? (Linux, 1x dakika, birkaç saniye.) Sayısal bir çıktı değil:
+  # ifadeler atlanan bir görevin null ve '0' değerlerinin her ikisini de 0'a zorlar.
   changed:
     if: github.event_name == 'schedule' && github.event.repository.private
     runs-on: ${{ vars.SCSK_RUNNER && fromJSON(vars.SCSK_RUNNER) || 'ubuntu-latest' }}
@@ -51,70 +51,66 @@ jobs:
   build:
     needs: changed
     if: ${{ !cancelled() && needs.changed.outputs.unchanged != 'yes' && (github.event.repository.private && github.event_name != 'push' || !github.event.repository.private && github.ref_type == 'tag') }}
-    # VS 2022 (MSVC x64, MASM, Windows SDK) and CMake: preinstalled on windows-2025, installed on the self-hosted runner
+    # VS 2022 (MSVC x64, MASM, Windows SDK) ve CMake: windows-2025'te önceden yüklenmiştir, kendi barındırdığımız çalıştırıcıya kuruludur
     runs-on: ${{ vars.SCSK_RUNNER && fromJSON(vars.SCSK_RUNNER) || 'windows-2025' }}
-    timeout-minutes: 45     # green runs take 22-35 min with several runners on one PC, a hang still stops well short of 6 h
+    timeout-minutes: 45     # yeşil (başarılı) çalıştırmalar tek bir bilgisayardaki birkaç çalıştırıcıyla 22-35 dakika sürer, bir takılma yine de 6 saatin çok öncesinde durdurulur
     env:
       DOTNET_NOLOGO: 'true'
       DOTNET_CLI_TELEMETRY_OPTOUT: 'true'
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1   # v7.0.1
 
-      # the newest .NET 10 SDK: builds work with any SDK of global.json's floor or newer (publish.ps1 reads the shipped
-      # runtime and package versions from the published output)
+      # en yeni .NET 10 SDK: derlemeler global.json tabanı veya daha yeni herhangi bir SDK ile çalışır (publish.ps1, yayınlanan
+      # çıktıdan gönderilen çalışma zamanını ve paket sürümlerini okur)
       - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68   # v6.0.0
         with:
           dotnet-version: 10.0.x
 
-      # A persistent runner's global packages folder and HTTP cache hold whatever earlier jobs (PRs included) put there,
-      # and restore uses them as they are: a release tag restores into folders of its own, from nuget.org only.
-      - name: Package folders of this run (release tags)
+      # Kalıcı bir çalıştırıcının genel paketler klasörü ve HTTP önbelleği, önceki görevlerin (PR'lar dahil) oraya koyduğu her şeyi tutar,
+      # ve geri yükleme bunları olduğu gibi kullanır: bir sürüm etiketi yalnızca nuget.org'dan kendi klasörlerine geri yükler.
+      - name: Bu çalıştırmanın paket klasörleri (sürüm etiketleri)
         if: github.ref_type == 'tag'
         shell: powershell
         run: |
           $d = Join-Path $env:RUNNER_TEMP "nuget-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT"
           Remove-Item $d -Recurse -Force -ErrorAction SilentlyContinue
-          [IO.File]::AppendAllText($env:GITHUB_ENV, "NUGET_PACKAGES=$d\packages\`nNUGET_HTTP_CACHE_PATH=$d\http`n")   # UTF-8, no BOM; the trailing \ because csproj paths append to $(NuGetPackageRoot)
+          [IO.File]::AppendAllText($env:GITHUB_ENV, "NUGET_PACKAGES=$d\packages\`nNUGET_HTTP_CACHE_PATH=$d\http`n")   # UTF-8, BOM yok; sondaki \ çünkü csproj yolları $(NuGetPackageRoot)'a eklenir
 
       - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9   # v6.1.0
-        if: github.ref_type != 'tag' && !vars.SCSK_RUNNER   # a self-hosted runner keeps its own packages folder
+        if: github.ref_type != 'tag' && !vars.SCSK_RUNNER   # kendi barındırdığı bir çalıştırıcı kendi paketler klasörünü tutar
         with:
           path: ~\.nuget\packages
           key: nuget-${{ runner.os }}-${{ hashFiles('**/*.csproj') }}
           restore-keys: nuget-${{ runner.os }}-
 
       - name: Proxy (CMake, MSVC, Release x64)
-        shell: cmd   # the self-hosted runner's default is Windows PowerShell 5.1, which has no &&
+        shell: cmd   # kendi barındırdığı çalıştırıcının varsayılanı Windows PowerShell 5.1'dir ve && içermez
         run: cmake -S proxy -B proxy/build -A x64 && cmake --build proxy/build --config Release -- /m
 
       - name: Build
         run: dotnet build SCSKiller.slnx -c Release
 
-      # No Oodle DLL in anything that leaves the build (THIRD-PARTY-NOTICES.md); the app downloads it on first use.
-      # Nothing is signed here: the release step signs these exact bytes after checking them against the sums.
-      # A tag build is stamped with the tag's version (publish.ps1 drops the v; a bad tag fails it). Otherwise the dev default.
-      # Private-repo PRs publish nothing (no artifact is kept), the nightly run still proves the packaging.
+      # Derlemeden ayrılan hiçbir şeyde Oodle DLL yoktur (THIRD-PARTY-NOTICES.md); uygulama bunu ilk kullanımda indirir.
+      # Burada hiçbir şey imzalanmaz: sürüm adımı, toplamlarına (sums) karşı kontrol ettikten sonra bu tam baytları imzalar.
+      # Bir etiket derlemesi, etiketin sürümüyle damgalanır (publish.ps1 v'yi atar; hatalı bir etiket başarısız olmasına neden olur). Aksi takdirde dev varsayılanı kullanılır.
+      # Gizli depo PR'ları hiçbir şey yayınlamaz (hiçbir artifact tutulmaz), gecelik çalıştırma yine de paketlemeyi kanıtlar.
       - name: Publish
         if: ${{ !inputs.filter && (!github.event.repository.private || github.ref_type == 'tag' || github.event_name != 'pull_request') }}
         shell: powershell
         env:
           TAG: ${{ github.ref_type == 'tag' && github.ref_name || '' }}
         run: |
-          if ($env:TAG) { ./build/publish.ps1 -NoOodle -Version $env:TAG } else { ./build/publish.ps1 -NoOodle }
-          $dist = (Resolve-Path dist).Path
+          if ($env:TAG) { ./build/publish.ps1 -NoOodle -Version $env:TAG } else { ./build/publish.ps1 -NoOodle }$dist = (Resolve-Path dist).Path
           $sums = Get-ChildItem dist -Recurse -File -Exclude SHA256SUMS-unsigned.txt | Sort-Object FullName | ForEach-Object {
               "{0}  {1}" -f (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLower(), $_.FullName.Substring($dist.Length + 1).Replace('\', '/')
           }
-          [IO.File]::WriteAllText("$dist\SHA256SUMS-unsigned.txt", ($sums -join "`n") + "`n")   # sha256sum -c format (LF), paths relative to dist/
+          [IO.File]::WriteAllText("$dist\SHA256SUMS-unsigned.txt", ($sums -join "`n") + "`n")   # sha256sum -c formatı (LF), dist/ dizinine göreceli yollar
 
-      # Archived (not archive: false): `gh run download`, which the release step uses, can't read unarchived artifacts.
+      # Arşivlendi (not archive: false): sürüm adımının kullandığı 'gh run download', arşivlenmemiş artifact'leri okuyamaz.
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a   # v7.0.1
-        if: ${{ !inputs.filter && (!github.event.repository.private || github.ref_type == 'tag') }}   # private: storage is billed, only release tags need it
+        if: ${{ !inputs.filter && (!github.event.repository.private || github.ref_type == 'tag') }}   # private: depolama ücretlendirilir, yalnızca sürüm etiketlerinin buna ihtiyacı vardır
         with:
           name: SCSKiller-unsigned
           path: |
             dist/SCSKiller.zip
             dist/SHA256SUMS-unsigned.txt
-          compression-level: 0    # the zip is already compressed
-          retention-days: 7       # artifact storage is billed on private repos
-          if-no-files-found: error
