@@ -1,5 +1,5 @@
-; Raw jmp forwarders to the system d3d12.dll, or d3d11.dll when this dll is loaded as d3d11.dll (the D3D11 recorder);
-; pointers are resolved in DllMain (proxy.cpp).
+; Sistem d3d12.dll'ine veya bu dll d3d11.dll olarak yüklendiğinde (D3D11 kaydedicisi) d3d11.dll'e ham (raw) jmp yönlendiricileri;
+; işaretçiler DllMain içinde (proxy.cpp) çözümlenir.
 STUB MACRO name
     EXTERN real_&name:QWORD
     stub_&name PROC
