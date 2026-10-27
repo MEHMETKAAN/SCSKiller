@@ -1,26 +1,25 @@
-// D3D11 driver-shader-cache measurement probe. No SCSKiller shim involved: talks to the system
-// d3d11.dll directly to see what the driver caches on its own.
+// D3D11 sürücü-shader-önbelleği ölçüm probu. SCSKiller shim'i dahil edilmemiştir: sürücünün kendi kendine neyi önbelleğe
+// aldığını görmek için doğrudan sistem d3d11.dll'i ile konuşur.
 //
-// Child modes:
-//   cold seed        - compile fresh (seeded) heavy VS/PS/CS, time each Create, then time the
-//                       first draw (VS+PS) and first dispatch (CS) including a Flush + event-
-//                       query wait.
-//   state seed       - compile the same heavy VS/PS (already warmed once, untimed), then time
-//                       the FIRST draw under each of several fixed-function state variants
-//                       (default/blend/rtformat/layout/depth/msaa).
-//   pair1 vsSeed psSeed         - draw once with two fresh shaders (both never seen anywhere).
-//   pair2 vsSeed psSeed vsSeed2 psSeed2 - vsSeed/psSeed reproduce pair1's bytecode (already seen
-//                       cross-process); vsSeed2/psSeed2 are fresh. Draws: seen-VS+fresh-PS,
-//                       fresh-VS+seen-PS, both-seen (default layout), both-seen (new layout).
-//                       Answers whether the driver caches per shader stage or per VS+PS pair.
-//   compile <file.hlsl> <target> <out.bin> - D3DCompile a file ("main"), write the bytecode.
-//   first <vs.bin> <ps.bin> - time the first draw of given bytecode (a VS with POSITION float3 + TEXCOORD0 float2
-//                       inputs, a PS with up to 4 textures, 1 sampler, 1 float4 cbuffer). ~17 ms cold, ~1 ms when
-//                       the driver cache already holds both (warmed by scskiller_warm).
-//   firsttess <vs.bin> <hs.bin> <ds.bin> <ps.bin> - the same draw through a hull and a domain shader (3-point patches).
-//   firstps <ps.bin>   - time the first draw of a PS alone (behind its own VS, drawn first).
-// No args: orchestrator. Runs the child under itself and copies of itself (same/other exe name,
-// same/other folder), 3x with fresh seeds each, and prints medians.
+// Alt işlem (Child) modları:
+//   cold seed        - yeni (tohumlanmış) ağır VS/PS/CS derler, her Create'i zamanlar, ardından Flush + olay-
+//                       sorgusu beklemesini içeren ilk çizimi (VS+PS) ve ilk dağıtımı (CS) zamanlar.
+//   state seed       - aynı ağır VS/PS'i derler (zaten bir kez ısıtılmış, zamanlanmamış), ardından çeşitli 
+//                       sabit işlevli durum varyantları (varsayılan/blend/rtformat/layout/depth/msaa) altında 
+//                       İLK çizimi zamanlar.
+//   pair1 vsSeed psSeed         - iki tamamen yeni shader ile (her ikisi de hiçbir yerde görülmemiş) bir kez çizer.
+//   pair2 vsSeed psSeed vsSeed2 psSeed2 - vsSeed/psSeed, pair1'in bytecode'unu yeniden üretir (süreçler arası
+//                       bu exe adı altında sürücü tarafından zaten görülmüştür); vsSeed2/psSeed2 yenidir, daha önce hiç görülmemiştir.
+//                       Çizimler: görülmüş-VS+yeni-PS, yeni-VS+görülmüş-PS, her-ikisi-görülmüş (varsayılan düzen),
+//                       her-ikisi-görülmüş (yeni düzen). Sürücünün shader aşaması başına mı yoksa VS+PS çifti başına mı önbelleklediği sorusunu yanıtlar.
+//   compile <dosya.hlsl> <hedef> <cikti.bin> - Bir dosyayı D3DCompile eder ("main"), bytecode'u yazar.
+//   first <vs.bin> <ps.bin> - verilen bytecode'un ilk çizimini zamanlar (POSITION float3 + TEXCOORD0 float2 girişli
+//                       bir VS, en fazla 4 doku, 1 örnekleyici, 1 float4 cbuffer'lı bir PS). Soğukken ~17 ms, 
+//                       sürücü önbelleği her ikisini de (scskiller_warm tarafından ısıtılmış) zaten tuttuğunda ~1 ms.
+//   firsttess <vs.bin> <hs.bin> <ds.bin> <ps.bin> - bir hull ve domain shader aracılığıyla aynı çizim (3 noktalı yamalar).
+//   firstps <ps.bin>   - bir PS'in tek başına ilk çizimini zamanlar (burada derlenen giriş düzeni olmayan bir VS'nin arkasında, önce çizilir).
+// Parametre yok: orkestratör. Alt işlemi kendi altında ve kendi kopyaları altında (aynı/farklı exe adı,
+// aynı/farklı klasör), her birini yeni tohumlarla 3 kez çalıştırır ve medyan değerlerini yazdırır.
 #define NOMINMAX
 #include <windows.h>
 #include <d3d11.h>
@@ -34,10 +33,9 @@
 #pragma comment(lib, "d3d11.lib")
 #pragma comment(lib, "dxgi.lib")
 
-// Shaders "heavy" enough (unrolled transcendental loops, 4 textures) that a cold driver compile
-// is clearly measurable. `seed` changes embedded constants so bytecode is fresh; two calls with
-// the same seed reproduce byte-identical bytecode (the compiler is deterministic on identical
-// text), which is how the cross-process "seen before" tests work.
+// Soğuk (cold) bir sürücü derlemesinin net bir şekilde ölçülebileceği kadar "ağır" shader'lar (açılmış (unrolled) transandantal döngüler, 4 doku).
+// `tohum` (seed), gömülü sabitleri değiştirir, böylece bytecode yeni (fresh) olur; aynı tohumla iki çağrı 
+// baytları tamamen aynı olan bytecode üretir (derleyici aynı metinde deterministiktir), süreçler arası "daha önce görülmüş" testleri bu şekilde çalışır.
 static std::string heavy_vsrc(unsigned seed) {
     std::string k = std::to_string(seed) + ".0";
     return "cbuffer C:register(b0){float4 kc;};"
@@ -59,8 +57,8 @@ static std::string heavy_csrc(unsigned seed) {
            "float v=" + k + ";[unroll]for(int i=0;i<300;++i){v=sin(v*1.001+i)+cos(v)*exp(-abs(v)*0.01)+sqrt(abs(v)+0.001);} b[id.x]=v;}";
 }
 
-// Times issuing work + Flush + waiting on an event query, so the result includes any driver-side
-// compile that happens lazily at first use, not just CPU-side Create/Draw call overhead.
+// İş yayınlama + Temizleme (Flush) + bir olay sorgusunda beklemeyi zamanlar, böylece sonuç sadece CPU tarafındaki Create/Draw çağrısı 
+// yükünü değil, ilk kullanımda tembel (lazily) olarak gerçekleşen herhangi bir sürücü tarafı derlemesini de içerir.
 static double timed_gpu(ID3D11Device* dev, ID3D11DeviceContext* ctx, const std::function<void()>& issue) {
     ID3D11Query* q = nullptr;
     D3D11_QUERY_DESC qd = {D3D11_QUERY_EVENT, 0};
@@ -96,11 +94,11 @@ static ID3D11Buffer* make_vb(ID3D11Device* dev, const void* data, UINT bytes) {
 
 struct Variant { const wchar_t* name; DXGI_FORMAT rtv_fmt; UINT samples; bool blend; bool depth; bool split_layout; };
 
-// One draw call under the given fixed-function state, timed end-to-end (see timed_gpu).
+// Verilen sabit işlev durumu (fixed-function state) altında uçtan uca zamanlanmış bir çizim çağrısı (bkz. timed_gpu).
 static double draw_variant(ID3D11Device* dev, ID3D11DeviceContext* ctx, ID3D11VertexShader* vs, ID3D11PixelShader* ps,
                             ID3DBlob* vsblob, ID3D11Buffer* cb, ID3D11ShaderResourceView* srv, ID3D11SamplerState* smp,
                             const Variant& v, ID3D11HullShader* hs = nullptr, ID3D11DomainShader* dom = nullptr) {
-    // Positions and UVs, split across two buffers only for the "layout" variant.
+    // Yalnızca "layout" varyantı için iki arabelleğe (buffer) bölünmüş Konumlar (Positions) ve UV'ler.
     float posuv[3][5] = {{-1, -1, 0, 0, 0}, {0, 1, 0, 0.5f, 1}, {1, -1, 0, 1, 0}};
     float pos[3][3], uv[3][2];
     for (int i = 0; i < 3; ++i) { memcpy(pos[i], posuv[i], 12); memcpy(uv[i], posuv[i] + 3, 8); }
@@ -185,7 +183,7 @@ static double draw_variant(ID3D11Device* dev, ID3D11DeviceContext* ctx, ID3D11Ve
     return t;
 }
 
-// Texture/sampler/cbuffer shared by every draw: only the shaders and fixed-function state vary.
+// Her çizim tarafından paylaşılan Doku/örnekleyici/cbuffer: Yalnızca shader'lar ve sabit-işlevli durumlar değişir.
 struct Common { ID3D11ShaderResourceView* srv; ID3D11SamplerState* smp; ID3D11Buffer* cb; };
 static Common make_common(ID3D11Device* dev) {
     Common c{};
@@ -199,7 +197,7 @@ static Common make_common(ID3D11Device* dev) {
     dev->CreateBuffer(&cbd, &cbi, &c.cb);
     return c;
 }
-// scskiller_warm's default adapter: the hardware one with the most dedicated VRAM
+// scskiller_warm'ın varsayılan adaptörü: en çok ayrılmış VRAM'e sahip donanımsal olanı
 static ID3D11Device* make_device(ID3D11DeviceContext** ctx) {
     IDXGIFactory1* f = nullptr;
     IDXGIAdapter1 *best = nullptr, *a;
@@ -284,14 +282,14 @@ static int child_state(unsigned seed) {
     ID3D11Buffer* cb = c.cb;
 
     Variant variants[] = {
-        {L"default", DXGI_FORMAT_R8G8B8A8_UNORM, 1, false, false, false},  // untimed-equivalent baseline, shown too
+        {L"default", DXGI_FORMAT_R8G8B8A8_UNORM, 1, false, false, false},  // zamanlanmamış-eşdeğer temel çizgi (baseline), bu da gösterilir
         {L"blend",   DXGI_FORMAT_R8G8B8A8_UNORM, 1, true,  false, false},
         {L"rtformat",DXGI_FORMAT_R16G16B16A16_FLOAT, 1, false, false, false},
         {L"layout",  DXGI_FORMAT_R8G8B8A8_UNORM, 1, false, false, true},
         {L"depth",   DXGI_FORMAT_R8G8B8A8_UNORM, 1, false, true,  false},
         {L"msaa",    DXGI_FORMAT_R8G8B8A8_UNORM, 4, false, false, false},
     };
-    // One untimed warm draw first so the VS/PS bytecode-level compile (if lazy) is already paid for.
+    // VS/PS bytecode seviyesi derlemesinin (eğer tembelse) bedeli zaten ödenmiş olsun diye önce zamanlanmamış bir ısınma (warm) çizimi.
     draw_variant(dev, ctx, vs, ps, vsb, cb, srv, smp, variants[0]);
     for (auto& v : variants) {
         double t = draw_variant(dev, ctx, vs, ps, vsb, cb, srv, smp, v);
@@ -300,7 +298,7 @@ static int child_state(unsigned seed) {
     return 0;
 }
 
-// Process 1 of the per-shader-vs-per-pair test: draw once with two totally fresh shaders.
+// shader-başına veya çift-başına (per-shader-vs-per-pair) testinin 1. Süreci: iki tamamen yeni (fresh) shader ile bir kez çizin.
 static int child_pair1(unsigned vs_seed, unsigned ps_seed) {
     ID3D11DeviceContext* ctx = nullptr;
     ID3D11Device* dev = make_device(&ctx);
@@ -318,8 +316,8 @@ static int child_pair1(unsigned vs_seed, unsigned ps_seed) {
     return 0;
 }
 
-// Process 2: vs_seed/ps_seed reproduce process 1's bytecode (byte-identical, so already seen by
-// the driver cross-process under this exe name); vs_seed2/ps_seed2 are fresh, never seen before.
+// Süreç 2: vs_seed/ps_seed, 1. sürecin bytecode'unu yeniden üretir (bayt-özdeşi, yani sürücü tarafından bu exe adı altında
+// süreçler arası zaten görülmüştür); vs_seed2/ps_seed2 yenidir, daha önce hiç görülmemiştir.
 static int child_pair2(unsigned vs_seed, unsigned ps_seed, unsigned vs_seed2, unsigned ps_seed2) {
     ID3D11DeviceContext* ctx = nullptr;
     ID3D11Device* dev = make_device(&ctx);
@@ -387,8 +385,8 @@ static int child_first(const wchar_t* vs_path, const wchar_t* ps_path) {
     return 0;
 }
 
-// firstps: the PS alone, behind a VS without input layout compiled here (SV_Position + TEXCOORD0 out); created right before
-// its draw: AMD compiles from create on in the background.
+// firstps: Sadece PS, burada derlenen giriş düzeni (input layout) olmayan bir VS'nin arkasında (SV_Position + TEXCOORD0 çıkışı);
+// çiziminden hemen önce oluşturulur: AMD, oluşturmadan (create) itibaren arka planda derler.
 static int child_firstps(const wchar_t* ps_path) {
     std::string p = read_file(ps_path);
     ID3DBlob* vsb = compile("struct O{float4 p:SV_Position;float2 uv:TEXCOORD0;};O main(uint i:SV_VertexID){O o;o.uv=float2(i&1,i>>1);o.p=float4(o.uv*2-1,0.5,1);return o;}", "vs_5_0");
@@ -411,7 +409,7 @@ static int child_firstps(const wchar_t* ps_path) {
     ctx->PSSetShaderResources(0, 4, srvs);
     ctx->PSSetSamplers(0, 1, &c.smp);
     ctx->PSSetConstantBuffers(0, 1, &c.cb);
-    timed_gpu(dev, ctx, [&] { ctx->Draw(3, 0); });  // the VS's own compile
+    timed_gpu(dev, ctx, [&] { ctx->Draw(3, 0); });  // VS'nin kendi derlemesi
     ID3D11PixelShader* ps = nullptr;
     dev->CreatePixelShader(p.data(), p.size(), nullptr, &ps);
     CHECK(vs && ps);
@@ -420,7 +418,7 @@ static int child_firstps(const wchar_t* ps_path) {
     return 0;
 }
 
-// firsttess: the same with a hull and a domain shader (3-control-point patches; b0 in HS/DS, t0-t3 + s0 in the DS too).
+// firsttess: Bir hull ve domain shader ile aynısı (3-kontrol-noktalı yamalar; HS/DS'de b0, DS'de ayrıca t0-t3 + s0).
 static int child_firsttess(const wchar_t* vs_path, const wchar_t* hs_path, const wchar_t* ds_path, const wchar_t* ps_path) {
     std::string b[4] = {read_file(vs_path), read_file(hs_path), read_file(ds_path), read_file(ps_path)};
     ID3DBlob* vsb = nullptr;
@@ -500,7 +498,7 @@ static void parse_state(const std::string& out, std::vector<std::pair<std::strin
     }
 }
 
-// One entry per "PAIR tag=<name> ... draw=<ms>" line.
+// Her "PAIR tag=<name> ... draw=<ms>" satırı için bir giriş (entry).
 static void parse_pair(const std::string& out, std::vector<std::pair<std::string, double>>& tags) {
     size_t pos = 0;
     while ((pos = out.find("tag=", pos)) != std::string::npos) {
@@ -529,21 +527,21 @@ int wmain(int argc, wchar_t** argv) {
     wchar_t p[MAX_PATH];
     GetModuleFileNameW(nullptr, p, MAX_PATH);
     std::wstring self = p;
-    // every copy goes into a new folder of this run's, removed with all in it at the end
+    // her kopya bu çalıştırmanın (run) yeni bir klasörüne gider, sonunda içindeki her şeyle birlikte kaldırılır
     std::wstring dir = self.substr(0, self.find_last_of(L'\\') + 1) + L"probe11-" + std::to_wstring(GetCurrentProcessId()) + L"\\";
-    if (!CreateDirectoryW(dir.c_str(), nullptr)) return printf("can't create a new folder %ls\n", dir.c_str()), 1;
-    std::wstring exeA = dir + L"probe11.exe";          // the original name
-    std::wstring exeC = dir + L"probe11_altname.exe";  // different name, same folder
+    if (!CreateDirectoryW(dir.c_str(), nullptr)) return printf("yeni bir klasor %ls olusturulamadi\n", dir.c_str()), 1;
+    std::wstring exeA = dir + L"probe11.exe";          // orijinal isim
+    std::wstring exeC = dir + L"probe11_altname.exe";  // farkli isim, ayni klasor
     std::wstring subdir = dir + L"probe11_sub\\";
     CreateDirectoryW(subdir.c_str(), nullptr);
-    std::wstring exeB = subdir + L"probe11.exe";        // same name, different folder
+    std::wstring exeB = subdir + L"probe11.exe";        // ayni isim, farkli klasor
     CopyFileW(self.c_str(), exeA.c_str(), TRUE);
     CopyFileW(self.c_str(), exeC.c_str(), TRUE);
     CopyFileW(self.c_str(), exeB.c_str(), TRUE);
 
     unsigned base = GetTickCount() % 1000000;
 
-    printf("=== Q1: cross-process cache, same exe (process1 cold vs process2 same-name-hit) ===\n");
+    printf("=== S1 (Q1): surecler arasi (cross-process) onbellek, ayni exe (surec1 soguk (cold) vs surec2 ayni-isim-isabeti) ===\n");
     std::vector<double> c1_vs, c1_ps, c1_cs, c1_draw, c1_disp, c2_vs, c2_ps, c2_cs, c2_draw, c2_disp;
     for (int i = 0; i < 3; ++i) {
         unsigned seed = base + i * 7 + 1;
@@ -553,17 +551,17 @@ int wmain(int argc, wchar_t** argv) {
         double v1, p1, c1, d1, s1, v2, p2, c2, d2, s2;
         parse_cold(o1, &v1, &p1, &c1, &d1, &s1);
         parse_cold(o2, &v2, &p2, &c2, &d2, &s2);
-        printf("  seed=%u  proc1: vs=%.2f ps=%.2f cs=%.2f draw=%.2f disp=%.2f  |  proc2: vs=%.2f ps=%.2f cs=%.2f draw=%.2f disp=%.2f\n",
+        printf("  tohum(seed)=%u  surec(proc)1: vs=%.2f ps=%.2f cs=%.2f draw=%.2f disp=%.2f  |  surec(proc)2: vs=%.2f ps=%.2f cs=%.2f draw=%.2f disp=%.2f\n",
                seed, v1, p1, c1, d1, s1, v2, p2, c2, d2, s2);
         c1_vs.push_back(v1); c1_ps.push_back(p1); c1_cs.push_back(c1); c1_draw.push_back(d1); c1_disp.push_back(s1);
         c2_vs.push_back(v2); c2_ps.push_back(p2); c2_cs.push_back(c2); c2_draw.push_back(d2); c2_disp.push_back(s2);
     }
-    printf("  MEDIAN proc1(cold): create_vs=%.2f create_ps=%.2f create_cs=%.2f draw=%.2f dispatch=%.2f\n",
+    printf("  MEDYAN surec1(soguk): create_vs=%.2f create_ps=%.2f create_cs=%.2f draw=%.2f dispatch=%.2f\n",
            median(c1_vs), median(c1_ps), median(c1_cs), median(c1_draw), median(c1_disp));
-    printf("  MEDIAN proc2(same exe, same bytecode): create_vs=%.2f create_ps=%.2f create_cs=%.2f draw=%.2f dispatch=%.2f\n",
+    printf("  MEDYAN surec2(ayni exe, ayni bytecode): create_vs=%.2f create_ps=%.2f create_cs=%.2f draw=%.2f dispatch=%.2f\n",
            median(c2_vs), median(c2_ps), median(c2_cs), median(c2_draw), median(c2_disp));
 
-    printf("=== Q2: keyed by exe name? A warms 'probe11.exe', C=diff name same seed, B=same name diff folder same seed ===\n");
+    printf("=== S2 (Q2): exe ismine gore mi anahtarlaniyor? A 'probe11.exe'yi isitiyor, C=farkli isim ayni tohum, B=ayni isim farkli klasor ayni tohum ===\n");
     std::vector<double> qa_draw, qc_draw, qb_draw, qa_cs, qc_cs, qb_cs;
     for (int i = 0; i < 3; ++i) {
         unsigned seed = base + i * 7 + 101;
@@ -575,17 +573,17 @@ int wmain(int argc, wchar_t** argv) {
         parse_cold(oa, &av, &ap, &ac, &ad, &as);
         parse_cold(oc, &cv, &cp, &cc, &cd, &cs_);
         parse_cold(ob, &bv, &bp, &bc, &bd, &bs);
-        printf("  seed=%u  A(warm-name): draw=%.2f cs=%.2f | C(other name): draw=%.2f cs=%.2f | B(other folder, same name): draw=%.2f cs=%.2f\n",
+        printf("  tohum(seed)=%u  A(warm-name): draw=%.2f cs=%.2f | C(farkli isim): draw=%.2f cs=%.2f | B(farkli klasor, ayni isim): draw=%.2f cs=%.2f\n",
                seed, ad, ac, cd, cc, bd, bc);
         qa_draw.push_back(ad); qa_cs.push_back(ac);
         qc_draw.push_back(cd); qc_cs.push_back(cc);
         qb_draw.push_back(bd); qb_cs.push_back(bc);
     }
-    printf("  MEDIAN A(name warms cache): draw=%.2f create_cs=%.2f\n", median(qa_draw), median(qa_cs));
-    printf("  MEDIAN C(different exe name, same seed): draw=%.2f create_cs=%.2f\n", median(qc_draw), median(qc_cs));
-    printf("  MEDIAN B(same exe name, different folder): draw=%.2f create_cs=%.2f\n", median(qb_draw), median(qb_cs));
+    printf("  MEDYAN A(isim onbellegi isitiyor): draw=%.2f create_cs=%.2f\n", median(qa_draw), median(qa_cs));
+    printf("  MEDYAN C(farkli exe ismi, ayni tohum): draw=%.2f create_cs=%.2f\n", median(qc_draw), median(qc_cs));
+    printf("  MEDYAN B(ayni exe ismi, farkli klasor): draw=%.2f create_cs=%.2f\n", median(qb_draw), median(qb_cs));
 
-    printf("=== Q3: state-dependent recompiles, shaders already cached; process1 cold-state vs process2 same-state ===\n");
+    printf("=== S3 (Q3): duruma bagli yeniden derlemeler (recompiles), shader'lar zaten onbellekte; surec1 soguk-durum vs surec2 ayni-durum ===\n");
     std::vector<std::string> names;
     std::vector<std::vector<double>> p1_times, p2_times;
     for (int i = 0; i < 3; ++i) {
@@ -599,35 +597,35 @@ int wmain(int argc, wchar_t** argv) {
         if (names.empty()) { for (auto& kv : v1) names.push_back(kv.first); p1_times.resize(names.size()); p2_times.resize(names.size()); }
         for (size_t k = 0; k < v1.size() && k < names.size(); ++k) p1_times[k].push_back(v1[k].second);
         for (size_t k = 0; k < v2.size() && k < names.size(); ++k) p2_times[k].push_back(v2[k].second);
-        printf("  seed=%u  proc1: ", seed);
+        printf("  tohum(seed)=%u  surec(proc)1: ", seed);
         for (auto& kv : v1) printf("%s=%.2f ", kv.first.c_str(), kv.second);
-        printf(" | proc2: ");
+        printf(" | surec(proc)2: ");
         for (auto& kv : v2) printf("%s=%.2f ", kv.first.c_str(), kv.second);
         printf("\n");
     }
     for (size_t k = 0; k < names.size(); ++k)
-        printf("  MEDIAN variant=%-9s proc1(first-ever)=%.2fms  proc2(2nd process, same state)=%.2fms\n",
+        printf("  MEDYAN varyant=%-9s surec1(ilkez_gorulen)=%.2fms  surec2(2.surec, ayni durum)=%.2fms\n",
                names[k].c_str(), median(p1_times[k]), median(p2_times[k]));
 
-    printf("=== Q5: per-shader or per-pair cache? proc1 draws VS_a+PS_a fresh; proc2 (same exe) draws\n");
-    printf("    VS_a(seen)+PS_b(fresh), VS_c(fresh)+PS_a(seen), VS_a+PS_a(seen,default), VS_a+PS_a(seen,new layout) ===\n");
+    printf("=== S5 (Q5): shader basina veya cift(pair) basina onbellek? surec1 VS_a+PS_a cizer yeni(fresh); surec2 (ayni exe) cizer:\n");
+    printf("    VS_a(gorulen)+PS_b(yeni), VS_c(yeni)+PS_a(gorulen), VS_a+PS_a(gorulen,varsayilan), VS_a+PS_a(gorulen,yeni_duzen) ===\n");
     std::vector<std::string> ptags;
     std::vector<std::vector<double>> ptimes;
     for (int i = 0; i < 3; ++i) {
         unsigned vs_a = base + i * 11 + 301, ps_a = base + i * 11 + 302, vs_c = base + i * 11 + 303, ps_b = base + i * 11 + 304;
-        run_capture(exeA, L"pair1 " + std::to_wstring(vs_a) + L" " + std::to_wstring(ps_a));  // warms VS_a+PS_a under exeA's name
+        run_capture(exeA, L"pair1 " + std::to_wstring(vs_a) + L" " + std::to_wstring(ps_a));  // VS_a+PS_a'yı exeA adı altında ısıtır
         auto o2 = run_capture(exeA, L"pair2 " + std::to_wstring(vs_a) + L" " + std::to_wstring(ps_a) + L" " +
                                          std::to_wstring(vs_c) + L" " + std::to_wstring(ps_b));
         std::vector<std::pair<std::string, double>> v2;
         parse_pair(o2, v2);
         if (ptags.empty()) { for (auto& kv : v2) ptags.push_back(kv.first); ptimes.resize(ptags.size()); }
         for (size_t k = 0; k < v2.size() && k < ptags.size(); ++k) ptimes[k].push_back(v2[k].second);
-        printf("  rep=%d  ", i);
+        printf("  tekrar(rep)=%d  ", i);
         for (auto& kv : v2) printf("%s=%.2f ", kv.first.c_str(), kv.second);
         printf("\n");
     }
     for (size_t k = 0; k < ptags.size(); ++k)
-        printf("  MEDIAN %-18s draw=%.2fms\n", ptags[k].c_str(), median(ptimes[k]));
+        printf("  MEDYAN %-18s cizim(draw)=%.2fms\n", ptags[k].c_str(), median(ptimes[k]));
 
     for (auto& f : {exeB, exeC, exeA}) DeleteFileW(f.c_str());
     RemoveDirectoryW(subdir.c_str()), RemoveDirectoryW(dir.c_str());
