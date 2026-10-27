@@ -1,11 +1,11 @@
-// Shared by selftest.cpp and probe11.cpp: the check macro, a wall-clock timer and the fxc wrapper.
+// selftest.cpp ve probe11.cpp tarafından paylaşılır: check makrosu, duvar saati (wall-clock) zamanlayıcısı ve fxc sarmalayıcısı.
 #pragma once
 #include <d3dcompiler.h>
 #include <chrono>
 #include <cstdio>
 #include <string>
 
-#define CHECK(x) do { if (!(x)) { printf("FAIL %s:%d: %s\n", __FILE__, __LINE__, #x); return 1; } } while (0)
+#define CHECK(x) do { if (!(x)) { printf("BASARISIZ %s:%d: %s\n", __FILE__, __LINE__, #x); return 1; } } while (0)
 
 template <class F> static double ms(F&& f) {
     auto t0 = std::chrono::steady_clock::now();
