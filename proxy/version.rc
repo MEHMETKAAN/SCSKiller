@@ -1,13 +1,13 @@
-// Version resource of d3d12.dll and scskiller_warm.exe (SCSK_RC_WARM). Same product metadata as Directory.Build.props.
+// d3d12.dll ve scskiller_warm.exe (SCSK_RC_WARM) için sürüm kaynağı. Directory.Build.props ile aynı ürün meta verileri.
 #include <winres.h>
 #include "version.h"
 
 #ifdef SCSK_RC_WARM
-#define SCSK_DESC "SCSKiller driver shader cache warmer"
+#define SCSK_DESC "SCSKiller surucu shader onbellek isiticisi"
 #define SCSK_NAME "scskiller_warm.exe"
 #define SCSK_TYPE VFT_APP
 #else
-#define SCSK_DESC "SCSKiller D3D12 proxy"
+#define SCSK_DESC "SCSKiller D3D12 proxy'si"
 #define SCSK_NAME "d3d12.dll"
 #define SCSK_TYPE VFT_DLL
 #endif
